@@ -15,7 +15,7 @@ CORS(app, origins="*")
 
 CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID')
 CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
-REDIRECT_URI  = 'https://sales-server.onrender.com/oauth/callback'
+REDIRECT_URI  = 'https://sales-server-egdf.onrender.com/oauth/callback'
 SCOPES        = [
     'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/gmail.send',
