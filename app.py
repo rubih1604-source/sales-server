@@ -23,13 +23,21 @@ SCOPES = [
 ]
 TOKEN_FILE = '/tmp/gmail_token.json'
 
+# ── כל תבנית שעות אפשרית ──────────────────────────────────
+HOURS_PATTERN = r'(\d{1,2}[-–]\d{2})'
+
+# ── מילות מפתח שמשמעותן "היום" ────────────────────────────
+TODAY_KEYWORDS = [
+    'ירד להיום', 'ירדה להיום', 'ההתקנה להיום', 'התקנה להיום',
+    'להיום', 'היום', 'לאגום', 'לעגום',
+    'שובץ להיום', 'תואם להיום', 'מוקלד להיום',
+]
+
 def get_client_config():
-    return {"web": {
-        "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET,
+    return {"web": {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET,
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
         "token_uri": "https://oauth2.googleapis.com/token",
-        "redirect_uris": [REDIRECT_URI]
-    }}
+        "redirect_uris": [REDIRECT_URI]}}
 
 def get_credentials():
     if not os.path.exists(TOKEN_FILE): return None
@@ -49,9 +57,9 @@ def get_service():
 @app.route('/')
 def index():
     connected = get_credentials() is not None
-    st = "✅ מחובר ל-Gmail" if connected else "❌ לא מחובר"
-    link = "" if connected else "<br><br><a href='/oauth/start' style='background:#3b82f6;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold'>🔐 התחבר ל-Gmail</a>"
-    return f"<html dir='rtl'><body style='font-family:Arial;padding:40px;background:#0d1117;color:#e6edf3'><h1>שרת מכירות רובי</h1><p>סטטוס: <strong>{st}</strong></p>{link}</body></html>"
+    st = "✅ מחובר" if connected else "❌ לא מחובר"
+    link = "" if connected else "<br><a href='/oauth/start' style='background:#3b82f6;color:white;padding:12px 24px;border-radius:8px;text-decoration:none'>התחבר</a>"
+    return f"<html dir='rtl'><body style='font-family:Arial;padding:40px;background:#0d1117;color:#e6edf3'><h1>שרת מכירות רובי</h1><p>{st}</p>{link}</body></html>"
 
 @app.route('/oauth/start')
 def oauth_start():
@@ -65,7 +73,7 @@ def oauth_callback():
     flow = Flow.from_client_config(get_client_config(), scopes=SCOPES, redirect_uri=REDIRECT_URI)
     flow.fetch_token(authorization_response=request.url)
     save_credentials(flow.credentials)
-    return "<html dir='rtl'><body style='font-family:Arial;padding:40px;background:#0d1117;color:#e6edf3'><h1>✅ התחברות הצליחה!</h1><p style='color:#10b981'>המערכת מחוברת. אפשר לסגור.</p></body></html>"
+    return "<html dir='rtl'><body style='background:#0d1117;color:#e6edf3;padding:40px;font-family:Arial'><h1>✅ מחובר!</h1><p style='color:#10b981'>סגור חלון זה.</p></body></html>"
 
 @app.route('/api/status')
 def api_status():
@@ -83,15 +91,27 @@ def extract_body(payload, depth=0):
                 try: text += base64.urlsafe_b64decode(part['body']['data']).decode('utf-8', errors='ignore')
                 except: pass
         text += extract_body(part, depth+1)
-    return text[:5000]
+    return text[:6000]
 
 def parse_date_str(date_str):
     try:
         from email.utils import parsedate
         p = parsedate(date_str)
-        if p: return f'{p[2]:02d}/{p[1]:02d}/{p[0]}', f'{p[1]:02d}/{p[0]}'
+        if p:
+            return f'{p[2]:02d}/{p[1]:02d}/{p[0]}', f'{p[1]:02d}/{p[0]}'
     except: pass
     return '', ''
+
+def add_days_to_ddmm(ddmm, days):
+    """הוסף ימים לתאריך DD/MM"""
+    try:
+        from datetime import datetime, timedelta
+        parts = ddmm.split('/')
+        if len(parts) != 2: return ddmm
+        d = datetime(2026, int(parts[1]), int(parts[0]))
+        d += timedelta(days=days)
+        return f'{d.day:02d}/{d.month:02d}'
+    except: return ddmm
 
 def find_attachments(payload, attachments, message_id):
     fn = payload.get('filename', '')
@@ -100,27 +120,110 @@ def find_attachments(payload, attachments, message_id):
         if att_id: attachments.append({'filename': fn, 'attachmentId': att_id, 'messageId': message_id})
     for part in payload.get('parts', []): find_attachments(part, attachments, message_id)
 
+def extract_date_hours_from_message(msg_text, msg_date_ddmm):
+    """
+    חלץ תאריך ושעות מטקסט של מייל אחד.
+    מחזיר רשימה של (date_ddmm, hours, kind, priority)
+    priority: ככל שגבוה יותר — כך זה עדכני יותר
+    """
+    results = []
+    text = msg_text
+
+    # ── דפוס 1: תאריך מפורש + שעות ──────────────────────
+    # "DD/MM HH-HH" בכל וריאציה
+    explicit = re.findall(
+        r'(\d{1,2}/\d{2})\s+' + HOURS_PATTERN,
+        text
+    )
+    for date, hours in explicit:
+        results.append((date, hours, 'explicit', 3))
+
+    # ── דפוס 2: מוקלד/תואם + תאריך + שעות ───────────────
+    recorded = re.findall(
+        r'(?:מוקלד|תואם|אושר|אישר|נקבע|שובץ)\s+(\d{1,2}/\d{2})\s+' + HOURS_PATTERN,
+        text
+    )
+    for date, hours in recorded:
+        results.append((date, hours, 'recorded', 5))
+
+    # ── דפוס 3: מילות "היום" + שעות ─────────────────────
+    # "ירד להיום 16-18", "היום 16-18", "ההתקנה להיום 8-10" וכו'
+    today_words = '|'.join(re.escape(w) for w in TODAY_KEYWORDS)
+    today_matches = re.findall(
+        r'(?:' + today_words + r')\s*' + HOURS_PATTERN,
+        text
+    )
+    for hours in today_matches:
+        if msg_date_ddmm:
+            results.append((msg_date_ddmm, hours, 'today', 10))  # עדיפות גבוהה!
+
+    # ── דפוס 4: שעות + מילות "היום" (סדר הפוך) ──────────
+    today_after = re.findall(
+        HOURS_PATTERN + r'\s*(?:' + today_words + r')',
+        text
+    )
+    for hours in today_after:
+        if msg_date_ddmm:
+            results.append((msg_date_ddmm, hours, 'today', 10))
+
+    # ── דפוס 5: "מחר HH-HH" ──────────────────────────────
+    tomorrow_matches = re.findall(r'מחר\s+' + HOURS_PATTERN, text)
+    for hours in tomorrow_matches:
+        tomorrow = add_days_to_ddmm(msg_date_ddmm, 1) if msg_date_ddmm else ''
+        if tomorrow:
+            results.append((tomorrow, hours, 'tomorrow', 8))
+
+    # ── דפוס 6: "לעדכן לקוח DD/MM HH-HH" ────────────────
+    update_matches = re.findall(
+        r'(?:לעדכן לקוח|לעדכן|עדכון לקוח)\s+(\d{1,2}/\d{2})\s+' + HOURS_PATTERN,
+        text
+    )
+    for date, hours in update_matches:
+        results.append((date, hours, 'update', 9))
+
+    # ── דפוס 7: "HH-HH לעדכן לקוח" ──────────────────────
+    update_before = re.findall(
+        HOURS_PATTERN + r'\s+(?:לעדכן לקוח|לעדכן)',
+        text
+    )
+    for hours in update_before:
+        if msg_date_ddmm:
+            results.append((msg_date_ddmm, hours, 'update', 9))
+
+    return results
+
 def parse_sale_from_thread(messages, thread_id):
     full_text = ''
     first_subject = ''
-    last_date = ''
+    messages_info = []
 
     for i, m in enumerate(messages):
         hdrs = {h['name']: h['value'] for h in m['payload']['headers']}
         subj = hdrs.get('Subject', '')
+        date_str = hdrs.get('Date', '')
+        date_full, month = parse_date_str(date_str)
+        date_ddmm = date_full[:5] if date_full else ''  # DD/MM
         if i == 0: first_subject = subj
-        last_date = hdrs.get('Date', last_date)
-        full_text += subj + '\n' + m.get('snippet', '') + '\n' + extract_body(m['payload']) + '\n'
+        body = m.get('snippet', '') + '\n' + extract_body(m['payload'])
+        full_text += subj + '\n' + body + '\n'
+        messages_info.append({
+            'date_full': date_full,
+            'date_ddmm': date_ddmm,
+            'text': body,
+            'subject': subj,
+            'index': i
+        })
 
     # בדוק שזה thread מכירה
     sale_keywords = ['תואם', 'לאשר חוזה', 'ממירים', 'דאבל יס', 'דרבל יס', 'שובץ',
-                     'להקים', 'ממיר', 'מוקלד', 'אישר', 'אושר', 'חוזה', 'הוק', 'YES']
+                     'להקים', 'ממיר', 'מוקלד', 'אישר', 'אושר', 'חוזה', 'הוק',
+                     'לעדכן לקוח', 'ירד להיום', 'ירדה להיום', 'ההתקנה להיום']
     if not any(k in full_text for k in sale_keywords): return None
 
     # שם מנושא
-    subj = re.sub(r'^(Re|Fwd|FW|RE):\s*', '', first_subject, flags=re.IGNORECASE).strip()
-    subj = re.sub(r'[-–].*', '', subj).strip()
-    if not subj or len(subj) < 2: return None
+    subj_clean = re.sub(r'^(Re|Fwd|FW|RE):\s*', '', first_subject, flags=re.IGNORECASE).strip()
+    subj_clean = re.sub(r'[-–].*', '', subj_clean).strip()
+    if not subj_clean or len(subj_clean) < 2: return None
 
     # ביטול
     cancel_phrases = ['לא להקים', 'התחרטה', 'לבטל', 'ביטול', 'מבטל', 'בוטל', 'ביטל', 'מבטלת', 'ביטלה']
@@ -129,68 +232,54 @@ def parse_sale_from_thread(messages, thread_id):
 
     # מספר לקוח
     cid = ''
-    m = re.search(r'לקוח\s+(\d{7})', full_text)
-    if m: cid = m.group(1)
+    cid_m = re.search(r'לקוח\s+(\d{7})', full_text)
+    if cid_m: cid = cid_m.group(1)
 
-    # תאריך ושעות — מילות מפתח לסטטוס סופי
-    # מוקלד/אישר/אושר = סטטוס הגבוה ביותר
-    confirmed_patterns = [
-        r'מוקלד\s+(\d{1,2}/\d{2})\s+(\d{1,2}-\d{2})',
-        r'אושר\s+(\d{1,2}/\d{2})\s+(\d{1,2}-\d{2})',
-        r'אישר\s+(\d{1,2}/\d{2})\s+(\d{1,2}-\d{2})',
-        r'מאושר\s+(\d{1,2}/\d{2})\s+(\d{1,2}-\d{2})',
-        r'נקבע\s+(\d{1,2}/\d{2})\s+(\d{1,2}-\d{2})',
-    ]
-    scheduled_patterns = [
-        r'תואם\s+(\d{1,2}/\d{2})\s+(\d{1,2}-\d{2})',
-        r'שובץ\s+ל[-]?(\d{1,2}/\d{2})\s+(\d{1,2}-\d{2})',
-        r'(\d{1,2}/\d{2})\s+(\d{1,2}-\d{2})',
-    ]
+    # ── אסוף כל עדכוני תאריך/שעה מכל המיילים ────────────
+    all_updates = []
+    for msg_info in messages_info:
+        updates = extract_date_hours_from_message(msg_info['text'], msg_info['date_ddmm'])
+        for date, hours, kind, priority in updates:
+            all_updates.append({
+                'msg_index': msg_info['index'],
+                'date': date,
+                'hours': hours,
+                'kind': kind,
+                'priority': priority
+            })
 
-    all_confirmed = []
-    for pat in confirmed_patterns:
-        for match in re.finditer(pat, full_text):
-            all_confirmed.append((match.start(), match.group(1), match.group(2), 'confirmed'))
+    install_date, install_hours, has_change, change_note, is_recorded = '', '', False, '', False
 
-    all_scheduled = []
-    for pat in scheduled_patterns:
-        for match in re.finditer(pat, full_text):
-            all_scheduled.append((match.start(), match.group(1), match.group(2), 'scheduled'))
+    if all_updates:
+        # מיין לפי: עדיפות (גבוה) → אינדקס מייל (מאוחר)
+        all_updates.sort(key=lambda x: (x['msg_index'], x['priority']))
 
-    all_found = all_confirmed + all_scheduled
-    all_found.sort(key=lambda x: x[0])
+        first_u = all_updates[0]
+        latest_u = all_updates[-1]
 
-    install_date, install_hours, has_change, change_note, is_confirmed = '', '', False, '', False
+        install_date = latest_u['date']
+        install_hours = latest_u['hours']
+        is_recorded = latest_u['kind'] in ('recorded', 'today', 'tomorrow', 'update')
 
-    if all_found:
-        latest = all_found[-1]
-        install_date = latest[1]
-        install_hours = latest[2]
-        is_confirmed = latest[3] == 'confirmed'
-
-        if len(all_found) > 1:
-            first = all_found[0]
-            if first[2] != latest[2] or first[1] != latest[1]:
+        if len(all_updates) > 1:
+            if first_u['date'] != latest_u['date'] or first_u['hours'] != latest_u['hours']:
                 has_change = True
-                change_note = f'שונה מ-{first[1]} {first[2]} ל-{latest[1]} {latest[2]}'
+                change_note = f"שונה מ-{first_u['date']} {first_u['hours']} ל-{latest_u['date']} {latest_u['hours']}"
 
-    # סטטוס — לפי מילות מפתח
+    # ── סטטוס ────────────────────────────────────────────
+    # בדוק אם יש מילת "היום" בטקסט
+    has_today_keyword = any(kw in full_text for kw in TODAY_KEYWORDS)
+
     if is_cancelled:
         status = 'בוטל'
-    elif is_confirmed or any(w in full_text for w in ['מוקלד', 'אושר', 'אישר', 'מאושר', 'נקבע']):
-        # מוקלד = שובץ לוח זמנים
-        if 'הוק' in full_text or 'HOK' in full_text.upper():
-            status = 'מוקלד + הוק'
-        else:
-            status = 'מוקלד'
-    elif any(w in full_text for w in ['לאשר חוזה', 'ממתין לחוזה', 'לאשר']) and ('הוק' in full_text or 'HOK' in full_text.upper()):
+    elif is_recorded or has_today_keyword or any(w in full_text for w in ['מוקלד','אושר','אישר','לעדכן לקוח']):
+        status = 'מוקלד + הוק' if ('הוק' in full_text or 'HOK' in full_text.upper()) else 'מוקלד'
+    elif 'לאשר חוזה' in full_text and ('הוק' in full_text):
         status = 'לאשר חוזה + הוק'
-    elif any(w in full_text for w in ['לאשר חוזה', 'ממתין לחוזה']):
+    elif 'לאשר חוזה' in full_text:
         status = 'לאשר חוזה'
     elif 'שובץ' in full_text:
         status = 'שובץ'
-    elif 'בנק התקנה' in full_text or 'בהקדם' in full_text:
-        status = 'בהקדם'
     else:
         status = 'בהקדם'
 
@@ -207,12 +296,12 @@ def parse_sale_from_thread(messages, thread_id):
             install_month = f'{parts[1]}/2026'
             is_april = parts[1] == '04'
 
-    # תאריך המייל
-    date, _ = parse_date_str(last_date)
+    sale_date = messages_info[0]['date_full'] if messages_info else ''
 
     return {
-        'name': subj,
+        'name': subj_clean,
         'customerId': cid,
+        'saleDate': sale_date,
         'installDate': install_date,
         'installMonth': install_month,
         'hours': install_hours,
@@ -222,11 +311,9 @@ def parse_sale_from_thread(messages, thread_id):
         'changeNote': change_note,
         'isCancelled': is_cancelled,
         'cancelNote': cancel_note,
-        'isConfirmed': is_confirmed,
         'isToday': False,
         'isApril': is_april,
-        'threadId': thread_id,
-        'lastDate': date
+        'threadId': thread_id
     }
 
 
@@ -237,13 +324,11 @@ def scan():
         return jsonify({'error': 'not_authenticated', 'auth_url': 'https://sales-server-egdf.onrender.com/oauth/start'}), 401
     try:
         sales, invoices = [], []
-
         results = service.users().messages().list(
             userId='me',
             q='(from:oshrityes2901@gmail.com OR to:oshrityes2901@gmail.com OR from:oritapiro22@gmail.com OR to:oritapiro22@gmail.com OR from:avielv014@gmail.com OR to:avielv014@gmail.com) after:2026/3/15',
             maxResults=300
         ).execute()
-
         threads_seen = set()
         for msg in results.get('messages', []):
             tid = msg['threadId']
@@ -255,13 +340,11 @@ def scan():
                 if sale: sales.append(sale)
             except: continue
 
-        # חשבוניות
         inv_results = service.users().messages().list(
             userId='me',
             q='(חשבונית OR invoice OR receipt OR morning.co OR render.com OR cardcom OR icount) has:attachment after:2026/1/1',
             maxResults=50
         ).execute()
-
         for msg in inv_results.get('messages', []):
             try:
                 md = service.users().messages().get(userId='me', id=msg['id'], format='full').execute()
@@ -289,7 +372,7 @@ def scan():
                 })
             except: continue
 
-        sales.sort(key=lambda x: (x.get('installMonth',''), x.get('installDate','')), reverse=True)
+        sales.sort(key=lambda x: (x.get('saleDate') or ''), reverse=True)
         return jsonify({'success': True, 'sales': sales, 'invoices': invoices,
                        'counts': {'sales': len(sales), 'invoices': len(invoices)}})
     except Exception as e:
