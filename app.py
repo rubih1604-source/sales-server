@@ -17,22 +17,65 @@ CORS(app, origins="*")
 CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID')
 CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
 REDIRECT_URI  = 'https://sales-server-egdf.onrender.com/oauth/callback'
-SCOPES = [
-    'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/gmail.send',
-    'https://www.googleapis.com/auth/gmail.compose',
-]
+SCOPES = ['https://www.googleapis.com/auth/gmail.readonly',
+          'https://www.googleapis.com/auth/gmail.send',
+          'https://www.googleapis.com/auth/gmail.compose']
+
+# ── שמירת טוקן — ENV VAR ראשון, /tmp גיבוי ──────────────
+# הטוקן נשמר ב-GMAIL_TOKEN env var כדי שלא יימחק עם /tmp
 TOKEN_FILE = '/tmp/gmail_token.json'
+TOKEN_ENV  = 'GMAIL_TOKEN'
 
-# כל תבנית שעות אפשרית: 8-10, 10-12, 12-14, 14-16, 16-18, 18-20 וכו'
-HOURS_RE = r'(\d{1,2}[-–]\d{2})'
+def load_token_data():
+    # נסה env var קודם (עמיד לאיפוס)
+    env_val = os.environ.get(TOKEN_ENV)
+    if env_val:
+        try: return json.loads(env_val)
+        except: pass
+    # גיבוי: קובץ
+    if os.path.exists(TOKEN_FILE):
+        with open(TOKEN_FILE) as f:
+            return json.load(f)
+    return None
 
-# מילות מפתח "היום" — מחוברות לתאריך המייל
-TODAY_KW = [
-    'ירד להיום', 'ירדה להיום', 'ההתקנה להיום', 'התקנה להיום',
-    'להיום', 'היום', 'שובץ להיום', 'תואם להיום', 'מוקלד להיום',
-    'ירד ל-היום', 'ירדה ל-היום',
-]
+def save_token_data(token, refresh_token):
+    data = {'token': token, 'refresh_token': refresh_token}
+    # שמור לקובץ תמיד
+    with open(TOKEN_FILE, 'w') as f:
+        json.dump(data, f)
+    # נסה לעדכן env var (עובד רק אם יש RENDER_API_KEY)
+    _try_update_render_env(data)
+
+def _try_update_render_env(data):
+    """עדכן את ה-env var ב-Render דרך ה-API שלהם"""
+    try:
+        api_key = os.environ.get('RENDER_API_KEY')
+        service_id = os.environ.get('RENDER_SERVICE_ID')
+        if not api_key or not service_id:
+            return
+        import urllib.request
+        payload = json.dumps({'key': TOKEN_ENV, 'value': json.dumps(data)}).encode()
+        req = urllib.request.Request(
+            f'https://api.render.com/v1/services/{service_id}/env-vars',
+            data=payload,
+            headers={'Authorization': f'Bearer {api_key}',
+                     'Content-Type': 'application/json'},
+            method='PUT'
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except: pass  # לא קריטי
+
+def get_credentials():
+    data = load_token_data()
+    if not data: return None
+    return Credentials(
+        token=data.get('token'),
+        refresh_token=data.get('refresh_token'),
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET,
+        scopes=SCOPES
+    )
 
 def get_client_config():
     return {"web": {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET,
@@ -40,27 +83,31 @@ def get_client_config():
         "token_uri": "https://oauth2.googleapis.com/token",
         "redirect_uris": [REDIRECT_URI]}}
 
-def get_credentials():
-    if not os.path.exists(TOKEN_FILE): return None
-    with open(TOKEN_FILE) as f: data = json.load(f)
-    return Credentials(token=data.get('token'), refresh_token=data.get('refresh_token'),
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=CLIENT_ID, client_secret=CLIENT_SECRET, scopes=SCOPES)
-
-def save_credentials(creds):
-    with open(TOKEN_FILE, 'w') as f:
-        json.dump({'token': creds.token, 'refresh_token': creds.refresh_token}, f)
-
 def get_service():
     creds = get_credentials()
-    return build('gmail', 'v1', credentials=creds) if creds else None
+    if not creds: return None
+    try:
+        svc = build('gmail', 'v1', credentials=creds)
+        # רענן טוקן אם פג
+        if creds.expired and creds.refresh_token:
+            from google.auth.transport.requests import Request
+            creds.refresh(Request())
+            save_token_data(creds.token, creds.refresh_token)
+        return svc
+    except: return None
+
+HOURS_RE = r'(\d{1,2}(?::\d{2})?[-–]\d{1,2}(?::\d{2})?)'
+TODAY_KW = sorted([
+    'ירד להיום','ירדה להיום','ההתקנה להיום','התקנה להיום',
+    'שובץ להיום','תואם להיום','מוקלד להיום','להיום','היום'
+], key=len, reverse=True)
 
 @app.route('/')
 def index():
     connected = get_credentials() is not None
-    st = "✅ מחובר" if connected else "❌ לא מחובר"
-    link = "" if connected else "<br><a href='/oauth/start' style='background:#3b82f6;color:white;padding:12px 24px;border-radius:8px;text-decoration:none'>התחבר</a>"
-    return f"<html dir='rtl'><body style='font-family:Arial;padding:40px;background:#0d1117;color:#e6edf3'><h1>שרת מכירות רובי</h1><p>{st}</p>{link}</body></html>"
+    st = "✅ מחובר ל-Gmail" if connected else "❌ לא מחובר"
+    link = "" if connected else "<br><br><a href='/oauth/start' style='background:#3b82f6;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold'>🔐 התחבר ל-Gmail</a>"
+    return f"<html dir='rtl'><body style='font-family:Arial;padding:40px;background:#0d1117;color:#e6edf3'><h1>שרת מכירות רובי</h1><p style='font-size:18px'>{st}</p>{link}</body></html>"
 
 @app.route('/oauth/start')
 def oauth_start():
@@ -73,29 +120,14 @@ def oauth_start():
 def oauth_callback():
     flow = Flow.from_client_config(get_client_config(), scopes=SCOPES, redirect_uri=REDIRECT_URI)
     flow.fetch_token(authorization_response=request.url)
-    save_credentials(flow.credentials)
-    return "<html dir='rtl'><body style='background:#0d1117;color:#e6edf3;padding:40px;font-family:Arial'><h1>✅ מחובר!</h1><p style='color:#10b981'>סגור חלון זה.</p></body></html>"
+    save_token_data(flow.credentials.token, flow.credentials.refresh_token)
+    return "<html dir='rtl'><body style='background:#0d1117;color:#e6edf3;padding:40px;font-family:Arial;text-align:center'><h1>✅ התחברות הצליחה!</h1><p style='color:#10b981;font-size:18px'>המערכת מחוברת ל-Gmail.<br>סגור חלון זה וחזור למערכת.</p></body></html>"
 
 @app.route('/api/status')
 def api_status():
     return jsonify({'connected': get_credentials() is not None})
 
-def extract_body(payload, depth=0):
-    if depth > 5: return ''
-    text = ''
-    if payload.get('body', {}).get('data'):
-        try: text += base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8', errors='ignore')
-        except: pass
-    for part in payload.get('parts', []):
-        if part.get('mimeType', '') in ('text/plain', 'text/html'):
-            if part.get('body', {}).get('data'):
-                try: text += base64.urlsafe_b64decode(part['body']['data']).decode('utf-8', errors='ignore')
-                except: pass
-        text += extract_body(part, depth+1)
-    return text[:5000]
-
 def parse_email_date(date_str):
-    """פרסר תאריך מייל → (DD/MM/YYYY, DD/MM, datetime)"""
     try:
         from email.utils import parsedate
         p = parsedate(date_str)
@@ -106,12 +138,45 @@ def parse_email_date(date_str):
     return '', '', None
 
 def ddmm_offset(ddmm, days):
-    """DD/MM + N ימים → DD/MM"""
     try:
         parts = ddmm.split('/')
         dt = datetime(2026, int(parts[1]), int(parts[0])) + timedelta(days=days)
         return f'{dt.day:02d}/{dt.month:02d}'
     except: return ''
+
+def normalize_hours(h):
+    h = h.replace('–', '-').replace(':00', '')
+    parts = h.split('-')
+    if len(parts) == 2:
+        try: return f'{int(parts[0])}-{int(parts[1])}'
+        except: pass
+    return h
+
+def find_updates_in_snippet(snippet, msg_ddmm, msg_dt):
+    results = []
+    text = snippet
+    today_pat = '|'.join(re.escape(k) for k in TODAY_KW)
+
+    # "היום/ירד להיום + שעות"
+    for m in re.finditer(r'(?:' + today_pat + r')\s*' + HOURS_RE, text, re.IGNORECASE):
+        results.append({'date': msg_ddmm, 'hours': normalize_hours(m.group(1)), 'kind': 'today', 'dt': msg_dt})
+    # "שעות + להיום"
+    for m in re.finditer(HOURS_RE + r'\s+(?:' + today_pat + r')', text, re.IGNORECASE):
+        results.append({'date': msg_ddmm, 'hours': normalize_hours(m.group(1)), 'kind': 'today', 'dt': msg_dt})
+    # "שעות לעדכן לקוח" (בלי תאריך = היום)
+    for m in re.finditer(HOURS_RE + r'\s+לעדכן\s+לקוח', text):
+        results.append({'date': msg_ddmm, 'hours': normalize_hours(m.group(1)), 'kind': 'today', 'dt': msg_dt})
+    # "מחר שעות"
+    for m in re.finditer(r'מחר\s+' + HOURS_RE, text):
+        tom = ddmm_offset(msg_ddmm, 1)
+        if tom: results.append({'date': tom, 'hours': normalize_hours(m.group(1)), 'kind': 'tomorrow', 'dt': msg_dt})
+    # "מוקלד/תואם/שובץ DD/MM שעות"
+    for m in re.finditer(r'(?:מוקלד|תואם|שובץ|אושר|אישר|נקבע|לקוח\s+\d+)\s+(\d{1,2}/\d{2})\s+' + HOURS_RE, text):
+        results.append({'date': m.group(1), 'hours': normalize_hours(m.group(2)), 'kind': 'recorded', 'dt': msg_dt})
+    # "DD/MM שעות"
+    for m in re.finditer(r'(\d{1,2}/\d{2})\s+' + HOURS_RE, text):
+        results.append({'date': m.group(1), 'hours': normalize_hours(m.group(2)), 'kind': 'explicit', 'dt': msg_dt})
+    return results
 
 def find_attachments(payload, attachments, message_id):
     fn = payload.get('filename', '')
@@ -120,97 +185,10 @@ def find_attachments(payload, attachments, message_id):
         if att_id: attachments.append({'filename': fn, 'attachmentId': att_id, 'messageId': message_id})
     for part in payload.get('parts', []): find_attachments(part, attachments, message_id)
 
-def extract_updates_from_message(snippet_and_body, msg_ddmm, msg_dt):
-    """
-    חלץ עדכוני תאריך+שעה ממייל אחד.
-    
-    הכלל החשוב: כשכתוב "היום 16-18" — התאריך הוא תאריך המייל.
-    כשכתוב "23/04 16-18" — התאריך הוא 23/04.
-    
-    מחזיר רשימה של dict: {date, hours, kind, msg_dt}
-    """
-    text = snippet_and_body
-    results = []
-
-    # ── קודם כל: דפוסים עם "היום" / "ירד להיום" / "ההתקנה להיום" ──
-    # אלה מחוברים תמיד לתאריך המייל
-    today_pattern = '|'.join(re.escape(k) for k in TODAY_KW)
-    
-    # "ירד להיום 16-18" / "היום 16-18" / "ההתקנה להיום 8-10"
-    for m in re.finditer(r'(?:' + today_pattern + r')\s*' + HOURS_RE, text):
-        results.append({
-            'date': msg_ddmm,
-            'hours': m.group(1),
-            'kind': 'today',
-            'msg_dt': msg_dt,
-        })
-    
-    # "16-18 להיום" (סדר הפוך)
-    for m in re.finditer(HOURS_RE + r'\s+(?:' + today_pattern + r')', text):
-        results.append({
-            'date': msg_ddmm,
-            'hours': m.group(1),
-            'kind': 'today',
-            'msg_dt': msg_dt,
-        })
-
-    # ── "מחר HH-HH" ────────────────────────────────────────
-    for m in re.finditer(r'מחר\s+' + HOURS_RE, text):
-        tomorrow = ddmm_offset(msg_ddmm, 1)
-        if tomorrow:
-            results.append({
-                'date': tomorrow,
-                'hours': m.group(1),
-                'kind': 'tomorrow',
-                'msg_dt': msg_dt,
-            })
-
-    # ── דפוסים עם תאריך מפורש ──────────────────────────────
-    # "שובץ 23/04 16-18 לעדכן לקוח"
-    # "תואם 14/04 10-12"
-    # "מוקלד 13/04 8-10"
-    # "לקוח XXXXXXX תואם DD/MM HH-HH"
-    # "DD/MM HH-HH לעדכן לקוח"
-    # "DD/MM HH-HH לאשר חוזה"
-    explicit = re.findall(
-        r'(?:מוקלד|תואם|שובץ|אושר|אישר|נקבע|שיבוץ)?\s*(\d{1,2}/\d{2})\s+' + HOURS_RE,
-        text
-    )
-    for date, hours in explicit:
-        results.append({
-            'date': date,
-            'hours': hours,
-            'kind': 'explicit',
-            'msg_dt': msg_dt,
-        })
-
-    # "DD/MM HH-HH לעדכן" / "DD/MM HH-HH לאשר"
-    explicit2 = re.findall(
-        r'(\d{1,2}/\d{2})\s+' + HOURS_RE + r'\s+(?:לעדכן|לאשר)',
-        text
-    )
-    for date, hours in explicit2:
-        results.append({
-            'date': date,
-            'hours': hours,
-            'kind': 'explicit',
-            'msg_dt': msg_dt,
-        })
-
-    return results
-
 def parse_sale_from_thread(messages, thread_id):
-    """
-    פרסר thread מכירה.
-    
-    לוגיקת עדכון תאריך:
-    - כל עדכון שעות מקושר לתאריך המייל שבו הוא הופיע
-    - העדכון האחרון (לפי תאריך המייל) מנצח
-    - "היום 16-18" במייל מ-14/04 = 14/04 בשעות 16-18
-    """
     full_text = ''
     first_subject = ''
-    all_messages_info = []
+    all_msgs = []
 
     for i, m in enumerate(messages):
         hdrs = {h['name']: h['value'] for h in m['payload']['headers']}
@@ -218,149 +196,87 @@ def parse_sale_from_thread(messages, thread_id):
         date_str = hdrs.get('Date', '')
         date_full, date_ddmm, msg_dt = parse_email_date(date_str)
         if i == 0: first_subject = subj
-        
-        # קח רק את ה-snippet וחלק קטן מהגוף — לא threadים ישנים
         snippet = m.get('snippet', '')
-        # חלץ גוף ראשון בלבד (לא ציטוטים)
-        body = extract_body(m['payload'])
-        # חתוך ציטוטים ישנים — הם מתחילים ב "בתאריך יום" או "> "
-        clean_body = re.split(r'בתאריך יום\s+[אבגדהוז]', body)[0]
-        clean_body = re.split(r'On [A-Za-z]', clean_body)[0]
-        
-        text_for_parse = snippet + '\n' + clean_body
-        full_text += subj + '\n' + text_for_parse + '\n'
-        
-        all_messages_info.append({
-            'index': i,
-            'date_full': date_full,
-            'date_ddmm': date_ddmm,
-            'msg_dt': msg_dt,
-            'text': text_for_parse,
-            'subject': subj,
-        })
+        full_text += subj + '\n' + snippet + '\n'
+        all_msgs.append({'i': i, 'snippet': snippet, 'date_full': date_full,
+                         'date_ddmm': date_ddmm, 'dt': msg_dt})
 
-    # בדוק שזה thread מכירה
-    sale_kw = ['תואם', 'לאשר חוזה', 'ממירים', 'דאבל יס', 'דרבל יס', 'שובץ',
-               'להקים', 'ממיר', 'מוקלד', 'אישר', 'אושר', 'הוק',
-               'לעדכן לקוח', 'ירד להיום', 'ירדה להיום', 'ההתקנה להיום']
+    sale_kw = ['תואם','לאשר חוזה','ממירים','שובץ','להקים','ממיר','מוקלד',
+               'אישר','אושר','הוק','לעדכן לקוח','ירד להיום','ירדה להיום','ההתקנה להיום']
     if not any(k in full_text for k in sale_kw): return None
 
-    # שם מנושא
     subj_clean = re.sub(r'^(Re|Fwd|FW|RE):\s*', '', first_subject, flags=re.IGNORECASE).strip()
     subj_clean = re.sub(r'[-–].*', '', subj_clean).strip()
     if not subj_clean or len(subj_clean) < 2: return None
 
-    # ביטול
-    cancel_phrases = ['לא להקים', 'התחרטה', 'לבטל', 'ביטול', 'מבטל', 'בוטל', 'ביטל', 'מבטלת', 'ביטלה']
+    cancel_phrases = ['לא להקים','התחרטה','לבטל','ביטול','מבטל','בוטל','ביטל','מבטלת','ביטלה']
     is_cancelled = any(p in full_text for p in cancel_phrases)
-    cancel_note = next((p for p in ['התחרטה', 'לא להקים', 'ביטל', 'ביטלה'] if p in full_text), '')
+    cancel_note = next((p for p in ['התחרטה','לא להקים','ביטל','ביטלה'] if p in full_text), '')
 
-    # מספר לקוח
     cid = ''
     cid_m = re.search(r'לקוח\s+(\d{7})', full_text)
     if cid_m: cid = cid_m.group(1)
 
-    # ── אסוף עדכונים מכל מייל בנפרד ──────────────────────
     all_updates = []
-    for msg_info in all_messages_info:
-        updates = extract_updates_from_message(
-            msg_info['text'],
-            msg_info['date_ddmm'],
-            msg_info['msg_dt']
-        )
-        for u in updates:
-            u['msg_index'] = msg_info['index']
+    for msg in all_msgs:
+        for u in find_updates_in_snippet(msg['snippet'], msg['date_ddmm'], msg['dt']):
+            u['msg_i'] = msg['i']
             all_updates.append(u)
 
-    # ── בחר את העדכון הנכון ────────────────────────────────
-    # מיין לפי תאריך המייל (msg_dt) — האחרון מנצח
-    # אם אין msg_dt — לפי אינדקס
-    def sort_key(u):
-        dt = u.get('msg_dt')
-        if dt: return (dt, u['msg_index'])
-        return (datetime.min, u['msg_index'])
-    
-    all_updates.sort(key=sort_key)
+    kind_priority = {'today': 4, 'tomorrow': 3, 'recorded': 3, 'update': 2, 'explicit': 1}
+    all_updates.sort(key=lambda u: (u['dt'] or datetime.min, kind_priority.get(u['kind'], 0)))
 
-    install_date, install_hours, has_change, change_note = '', '', False, ''
-    first_update = None
-    latest_update = None
-
+    install_date, install_hours, has_change, change_note, latest_kind = '', '', False, '', ''
     if all_updates:
-        first_update = all_updates[0]
-        latest_update = all_updates[-1]
-        install_date = latest_update['date']
-        install_hours = latest_update['hours']
+        first_u, latest_u = all_updates[0], all_updates[-1]
+        install_date = latest_u['date']
+        install_hours = latest_u['hours']
+        latest_kind = latest_u['kind']
+        if first_u['date'] != latest_u['date'] or first_u['hours'] != latest_u['hours']:
+            has_change = True
+            change_note = f"שונה מ-{first_u['date']} {first_u['hours']} ל-{latest_u['date']} {latest_u['hours']}"
 
-        if len(all_updates) > 1:
-            if first_update['date'] != latest_update['date'] or \
-               first_update['hours'] != latest_update['hours']:
-                has_change = True
-                change_note = f"שונה מ-{first_update['date']} {first_update['hours']} ל-{latest_update['date']} {latest_update['hours']}"
+    if is_cancelled: status = 'בוטל'
+    elif latest_kind in ('today','tomorrow','recorded','update') or \
+         any(w in full_text for w in ['מוקלד','אושר','אישר','לעדכן לקוח']):
+        status = 'מוקלד + הוק' if 'הוק' in full_text else 'מוקלד'
+    elif 'לאשר חוזה' in full_text and 'הוק' in full_text: status = 'לאשר חוזה + הוק'
+    elif 'לאשר חוזה' in full_text: status = 'לאשר חוזה'
+    elif 'שובץ' in full_text: status = 'שובץ'
+    else: status = 'בהקדם'
 
-    # ── סטטוס ────────────────────────────────────────────
-    has_today_kw = any(kw in full_text for kw in TODAY_KW)
-    latest_kind = latest_update['kind'] if latest_update else ''
-
-    if is_cancelled:
-        status = 'בוטל'
-    elif latest_kind in ('today', 'tomorrow') or any(w in full_text for w in ['מוקלד','אושר','אישר','לעדכן לקוח']):
-        status = 'מוקלד + הוק' if ('הוק' in full_text) else 'מוקלד'
-    elif 'לאשר חוזה' in full_text and 'הוק' in full_text:
-        status = 'לאשר חוזה + הוק'
-    elif 'לאשר חוזה' in full_text:
-        status = 'לאשר חוזה'
-    elif 'שובץ' in full_text:
-        status = 'שובץ'
-    else:
-        status = 'בהקדם'
-
-    # ממירים
     mirrors = 0
     mm = re.search(r'(\d+)\s*ממירים?', full_text)
     if mm: mirrors = int(mm.group(1))
 
-    # חודש
     install_month, is_april = '', False
     if install_date:
         parts = install_date.split('/')
         if len(parts) == 2:
-            install_month = f'{parts[1]}/2026'
-            is_april = parts[1] == '04'
+            install_month = f'{int(parts[1]):02d}/2026'
+            is_april = int(parts[1]) == 4
 
-    sale_date = all_messages_info[0]['date_full'] if all_messages_info else ''
-
-    return {
-        'name': subj_clean,
-        'customerId': cid,
-        'saleDate': sale_date,
-        'installDate': install_date,
-        'installMonth': install_month,
-        'hours': install_hours,
-        'mirrors': mirrors,
-        'status': status,
-        'hasChange': has_change,
-        'changeNote': change_note,
-        'isCancelled': is_cancelled,
-        'cancelNote': cancel_note,
-        'isToday': False,
-        'isApril': is_april,
-        'threadId': thread_id
-    }
-
+    sale_date = all_msgs[0]['date_full'] if all_msgs else ''
+    return {'name': subj_clean, 'customerId': cid, 'saleDate': sale_date,
+            'installDate': install_date, 'installMonth': install_month,
+            'hours': install_hours, 'mirrors': mirrors, 'status': status,
+            'hasChange': has_change, 'changeNote': change_note,
+            'isCancelled': is_cancelled, 'cancelNote': cancel_note,
+            'isToday': False, 'isApril': is_april, 'threadId': thread_id}
 
 @app.route('/api/scan')
 def scan():
     service = get_service()
     if not service:
-        return jsonify({'error': 'not_authenticated', 'auth_url': 'https://sales-server-egdf.onrender.com/oauth/start'}), 401
+        return jsonify({'error': 'not_authenticated',
+                       'auth_url': 'https://sales-server-egdf.onrender.com/oauth/start'}), 401
     try:
         sales, invoices = [], []
-        results = service.users().messages().list(
-            userId='me',
-            q='(from:oshrityes2901@gmail.com OR to:oshrityes2901@gmail.com OR from:oritapiro22@gmail.com OR to:oritapiro22@gmail.com OR from:avielv014@gmail.com OR to:avielv014@gmail.com) after:2026/3/15',
-            maxResults=300
-        ).execute()
+        results = service.users().messages().list(userId='me',
+            q='(from:oshrityes2901@gmail.com OR to:oshrityes2901@gmail.com OR '
+              'from:oritapiro22@gmail.com OR to:oritapiro22@gmail.com OR '
+              'from:avielv014@gmail.com OR to:avielv014@gmail.com) after:2026/3/15',
+            maxResults=300).execute()
 
         threads_seen = set()
         for msg in results.get('messages', []):
@@ -373,12 +289,9 @@ def scan():
                 if sale: sales.append(sale)
             except: continue
 
-        # חשבוניות
-        inv_results = service.users().messages().list(
-            userId='me',
-            q='(חשבונית OR invoice OR receipt OR morning.co OR render.com OR cardcom OR icount) has:attachment after:2026/1/1',
-            maxResults=50
-        ).execute()
+        inv_results = service.users().messages().list(userId='me',
+            q='(חשבונית OR invoice OR receipt OR morning.co OR render.com OR icount) '
+              'has:attachment after:2026/1/1', maxResults=50).execute()
         for msg in inv_results.get('messages', []):
             try:
                 md = service.users().messages().get(userId='me', id=msg['id'], format='full').execute()
@@ -387,45 +300,43 @@ def scan():
                 sender = hdrs.get('From', '')
                 date_str = hdrs.get('Date', '')
                 date_full, _, _ = parse_email_date(date_str)
-                month = date_full[3:10] if date_full else ''
-                biz = ['ר.א.מ','ליד מנג','render','funnelly','stripe','morning','חשבונית ירוקה','atp','icount','חשבונית מס','קבלה']
+                month = f'{date_full[3:5]}/{date_full[6:10]}' if len(date_full) >= 10 else ''
+                biz = ['ר.א.מ','ליד מנג','render','funnelly','stripe','morning','חשבונית ירוקה','atp','icount','קבלה']
                 if not any(k.lower() in (subj+sender).lower() for k in biz): continue
                 atts = []
                 find_attachments(md['payload'], atts, msg['id'])
-                inv_type = 'income' if any(k in (subj+sender) for k in ['ר.א.מ','עמלות','may zalah','May zalah']) else \
-                           ('subscription' if any(k in (subj+sender) for k in ['חשבונית ירוקה','morning','חשבון חודשי']) else 'expense')
+                inv_type = 'income' if any(k in (subj+sender) for k in ['ר.א.מ','עמלות','may zalah','May zalah']) \
+                    else ('subscription' if any(k in (subj+sender) for k in ['חשבונית ירוקה','morning']) else 'expense')
                 num_m = re.search(r'(\d{4,})', subj)
                 name_m = re.match(r'^"?([^"<]+)', sender)
-                invoices.append({
-                    'id': msg['id'], 'date': date_full, 'month': month,
+                invoices.append({'id': msg['id'], 'date': date_full, 'month': month,
                     'from': name_m.group(1).strip() if name_m else sender,
                     'subject': subj, 'description': subj[:50],
-                    'invoiceNum': num_m.group(1) if num_m else '',
-                    'type': inv_type, 'amount': None, 'currency': 'ILS',
+                    'invoiceNum': num_m.group(1) if num_m else '', 'type': inv_type,
                     'gmailLink': f'https://mail.google.com/mail/u/0/#all/{msg["id"]}',
-                    'hasAttachment': len(atts) > 0, 'attachments': atts
-                })
+                    'hasAttachment': len(atts) > 0, 'attachments': atts})
             except: continue
 
-        sales.sort(key=lambda x: x.get('saleDate') or '', reverse=True)
-        return jsonify({'success': True, 'sales': sales, 'invoices': invoices,
-                       'counts': {'sales': len(sales), 'invoices': len(invoices)}})
+        def d2i(d):
+            try: p=d.split('/'); return int(p[2])*10000+int(p[1])*100+int(p[0])
+            except: return 0
+        sales.sort(key=lambda x: d2i(x.get('saleDate','')), reverse=True)
+        return jsonify({'success': True, 'sales': sales, 'invoices': invoices})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
 
 @app.route('/api/attachment/<message_id>/<attachment_id>')
 def get_attachment(message_id, attachment_id):
     service = get_service()
     if not service: return jsonify({'error': 'not_authenticated'}), 401
     try:
-        att = service.users().messages().attachments().get(userId='me', messageId=message_id, id=attachment_id).execute()
+        att = service.users().messages().attachments().get(
+            userId='me', messageId=message_id, id=attachment_id).execute()
         data = base64.urlsafe_b64decode(att['data'])
         return Response(data, mimetype='application/pdf',
                        headers={'Content-Disposition': 'attachment; filename=invoice.pdf',
                                 'Access-Control-Allow-Origin': '*'})
     except Exception as e: return jsonify({'error': str(e)}), 500
-
 
 @app.route('/api/send-to-accountant', methods=['POST'])
 def send_to_accountant():
@@ -439,14 +350,7 @@ def send_to_accountant():
         msg['To'] = 'ei@eicpa.co.il'
         msg['Subject'] = f'חשבוניות {month_name} — ראובן חגג'
         body = f'שלום,\n\nמצורפות חשבוניות לחודש {month_name}.\n\n'
-        income = [i for i in invoices if i.get('type') == 'income']
-        expense = [i for i in invoices if i.get('type') != 'income']
-        if income:
-            body += f'הכנסות ({len(income)}):\n'
-            for inv in income: body += f'• {inv.get("from","")} — {inv.get("description","")}\n'
-        if expense:
-            body += f'\nהוצאות ({len(expense)}):\n'
-            for inv in expense: body += f'• {inv.get("from","")} — {inv.get("description","")}\n'
+        for inv in invoices: body += f'• {inv.get("from","")} — {inv.get("description","")}\n'
         body += '\nבברכה,\nרובי חגג'
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
         for inv in invoices:
@@ -466,7 +370,6 @@ def send_to_accountant():
         service.users().messages().send(userId='me', body={'raw': raw}).execute()
         return jsonify({'success': True})
     except Exception as e: return jsonify({'error': str(e)}), 500
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
