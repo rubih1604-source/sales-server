@@ -275,7 +275,7 @@ def scan():
         results = service.users().messages().list(userId='me',
             q='(from:oshrityes2901@gmail.com OR to:oshrityes2901@gmail.com OR '
               'from:oritapiro22@gmail.com OR to:oritapiro22@gmail.com OR '
-              'from:avielv014@gmail.com OR to:avielv014@gmail.com) after:2026/3/15',
+              'from:avielv014@gmail.com OR to:avielv014@gmail.com) after:2026/1/1',
             maxResults=300).execute()
 
         threads_seen = set()
