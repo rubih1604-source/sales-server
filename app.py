@@ -308,20 +308,29 @@ def parse_sale_from_thread(messages, thread_id):
     mm = re.search(r'(\d+)\s*ממירים?', full_text)
     if mm: mirrors = int(mm.group(1))
 
-    install_month, is_april = '', False
-    if install_date:
+    # installMonth = לפי תאריך ההתקנה (לא תאריך המכירה!)
+    # אם נמכר במאי והתקנה ביוני → ייראה ביוני
+    install_month = ''
+    if install_date and install_date not in ('—', 'ממתין', ''):
         parts = install_date.split('/')
         if len(parts) == 2:
-            install_month = f'{int(parts[1]):02d}/2026'
-            is_april = int(parts[1]) == 4
-
+            try: install_month = f'{int(parts[1]):02d}/2026'
+            except: pass
+    
+    # אם אין תאריך התקנה — השתמש בחודש המכירה
     sale_date = all_msgs[0]['date_full'] if all_msgs else ''
+    if not install_month and sale_date:
+        sale_parts = sale_date.split('/')
+        if len(sale_parts) >= 2:
+            try: install_month = f'{int(sale_parts[1]):02d}/2026'
+            except: pass
+
     return {'name': subj_clean, 'customerId': cid, 'saleDate': sale_date,
             'installDate': install_date, 'installMonth': install_month,
             'hours': install_hours, 'mirrors': mirrors, 'status': status,
             'hasChange': has_change, 'changeNote': change_note,
             'isCancelled': is_cancelled, 'cancelNote': cancel_note,
-            'isToday': False, 'isApril': is_april, 'threadId': thread_id}
+            'isToday': False, 'isApril': False, 'threadId': thread_id}
 
 @app.route('/api/scan')
 def scan():
