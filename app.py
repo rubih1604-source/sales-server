@@ -152,31 +152,90 @@ def normalize_hours(h):
         except: pass
     return h
 
+def normalize_hours(h):
+    """8-10, 08:00-10:00, 1000-1200 → 8-10"""
+    h = str(h).replace('–','-').strip()
+    h = re.sub(r':00', '', h)
+    h = re.sub(r'\b0?(\d{1,2})00\b', r'\1', h)
+    parts = h.split('-')
+    if len(parts) == 2:
+        try: return f'{int(parts[0])}-{int(parts[1])}'
+        except: pass
+    return h
+
+def normalize_date(d):
+    """14/6 → 14/06"""
+    parts = str(d).strip().split('/')
+    return f'{parts[0].zfill(2)}/{parts[1].zfill(2)}' if len(parts)==2 else str(d)
+
+def ddmm_offset(ddmm, days):
+    try:
+        p = ddmm.split('/')
+        dt = datetime(2026, int(p[1]), int(p[0])) + timedelta(days=days)
+        return f'{dt.day:02d}/{dt.month:02d}'
+    except: return ''
+
+STATUS_KW = r'(?:מוקלד|תואם|מתואם|שובץ|אושר|אישר|נקבע|מתוזמן|שיבוץ|תואמה)'
+BANK_KW   = ['בנק התקנה','בהקדם','ממתין','אין תאריך','לא נקבע']
+
 def find_updates_in_snippet(snippet, msg_ddmm, msg_dt):
+    """מנוע סריקה מקיף — מזהה כל וריאציה של תיאום התקנה."""
     results = []
-    text = snippet
+    text = snippet or ''
     today_pat = '|'.join(re.escape(k) for k in TODAY_KW)
 
-    # "היום/ירד להיום + שעות"
+    # 1. היום/ירד להיום + שעות
     for m in re.finditer(r'(?:' + today_pat + r')\s*' + HOURS_RE, text, re.IGNORECASE):
         results.append({'date': msg_ddmm, 'hours': normalize_hours(m.group(1)), 'kind': 'today', 'dt': msg_dt})
-    # "שעות + להיום"
     for m in re.finditer(HOURS_RE + r'\s+(?:' + today_pat + r')', text, re.IGNORECASE):
         results.append({'date': msg_ddmm, 'hours': normalize_hours(m.group(1)), 'kind': 'today', 'dt': msg_dt})
-    # "שעות לעדכן לקוח" (בלי תאריך = היום)
     for m in re.finditer(HOURS_RE + r'\s+לעדכן\s+לקוח', text):
         results.append({'date': msg_ddmm, 'hours': normalize_hours(m.group(1)), 'kind': 'today', 'dt': msg_dt})
-    # "מחר שעות"
-    for m in re.finditer(r'מחר\s+' + HOURS_RE, text):
+
+    # 2. מחר
+    for m in re.finditer(r'(?:התקנה\s+ל)?מחר\s+' + HOURS_RE, text):
         tom = ddmm_offset(msg_ddmm, 1)
         if tom: results.append({'date': tom, 'hours': normalize_hours(m.group(1)), 'kind': 'tomorrow', 'dt': msg_dt})
-    # "מוקלד/תואם/שובץ DD/MM שעות"
-    for m in re.finditer(r'(?:מוקלד|תואם|שובץ|אושר|אישר|נקבע|לקוח\s+\d+)\s+(\d{1,2}/\d{2})\s+' + HOURS_RE, text):
-        results.append({'date': m.group(1), 'hours': normalize_hours(m.group(2)), 'kind': 'recorded', 'dt': msg_dt})
-    # "DD/MM שעות"
-    for m in re.finditer(r'(\d{1,2}/\d{2})\s+' + HOURS_RE, text):
-        results.append({'date': m.group(1), 'hours': normalize_hours(m.group(2)), 'kind': 'explicit', 'dt': msg_dt})
+
+    # 3. נרמול
+    n = text
+    n = re.sub(r'ב(\d{1,2}/\d{1,2})', r'\1', n)
+    n = re.sub(r'ל(\d{1,2}/\d{1,2})', r'\1', n)
+    n = re.sub(r'בין\s+', '', n)
+    n = re.sub(r'מס\.?\s*לקוח', 'לקוח', n)
+    n = re.sub(r'מתואם', 'תואם', n)
+    n = re.sub(r'שיבוץ', 'שובץ', n)
+
+    # 4. STATUS DD/MM HH-HH
+    for m in re.finditer(STATUS_KW + r'\s+(\d{1,2}/\d{1,2})\s+' + HOURS_RE, n):
+        results.append({'date': normalize_date(m.group(1)), 'hours': normalize_hours(m.group(2)), 'kind': 'recorded', 'dt': msg_dt})
+
+    # 5. STATUS HH-HH DD/MM
+    for m in re.finditer(STATUS_KW + r'\s+' + HOURS_RE + r'\s+(\d{1,2}/\d{1,2})', n):
+        results.append({'date': normalize_date(m.group(2)), 'hours': normalize_hours(m.group(1)), 'kind': 'recorded', 'dt': msg_dt})
+
+    # 6. לקוח XXXXXXX [STATUS] DD/MM HH-HH
+    for m in re.finditer(r'לקוח\s+\d+\s+(?:' + STATUS_KW[3:-1] + r'\s+)?(\d{1,2}/\d{1,2})\s+' + HOURS_RE, n):
+        results.append({'date': normalize_date(m.group(1)), 'hours': normalize_hours(m.group(2)), 'kind': 'recorded', 'dt': msg_dt})
+
+    # 7. לקוח XXXXXXX HH-HH DD/MM
+    for m in re.finditer(r'לקוח\s+\d+\s+' + HOURS_RE + r'\s+(\d{1,2}/\d{1,2})', n):
+        results.append({'date': normalize_date(m.group(2)), 'hours': normalize_hours(m.group(1)), 'kind': 'recorded', 'dt': msg_dt})
+
+    # 8. DD/MM HH-HH גרידא
+    for m in re.finditer(r'(\d{1,2}/\d{1,2})\s+' + HOURS_RE, n):
+        results.append({'date': normalize_date(m.group(1)), 'hours': normalize_hours(m.group(2)), 'kind': 'explicit', 'dt': msg_dt})
+
+    # 9. HH-HH DD/MM גרידא
+    for m in re.finditer(HOURS_RE + r'\s+(\d{1,2}/\d{1,2})', n):
+        results.append({'date': normalize_date(m.group(2)), 'hours': normalize_hours(m.group(1)), 'kind': 'explicit', 'dt': msg_dt})
+
+    # 10. בנק התקנה
+    if not results and any(k in text for k in BANK_KW):
+        results.append({'date': 'ממתין', 'hours': '', 'kind': 'waiting', 'dt': msg_dt})
+
     return results
+
 
 def find_attachments(payload, attachments, message_id):
     fn = payload.get('filename', '')
