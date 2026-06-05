@@ -244,6 +244,48 @@ def find_attachments(payload, attachments, message_id):
         if att_id: attachments.append({'filename': fn, 'attachmentId': att_id, 'messageId': message_id})
     for part in payload.get('parts', []): find_attachments(part, attachments, message_id)
 
+def best_date_in_message(text, msg_ddmm, msg_dt):
+    """מחזיר (תאריך, שעות, עדיפות) הכי אמין בהודעה אחת, או None."""
+    candidates = []
+    n = text
+    n = re.sub(r'ב(\d{1,2}/\d{1,2})', r'\1', n)
+    n = re.sub(r'ל(\d{1,2}/\d{1,2})', r'\1', n)
+    n = re.sub(r'בין\s+', '', n)
+    n = re.sub(r'מתואם', 'תואם', n)
+    n = re.sub(r'שיבוץ', 'שובץ', n)
+    today_pat = '|'.join(re.escape(k) for k in TODAY_KW)
+
+    # עדיפות 4: STATUS + תאריך + שעות (תואם 3/06 14-16)
+    for m in re.finditer(r'(?:מוקלד|תואם|שובץ|אושר|אישר|נקבע)\s+(\d{1,2}/\d{1,2})\s+' + HOURS_RE, n):
+        candidates.append((normalize_date(m.group(1)), normalize_hours(m.group(2)), 4))
+    # עדיפות 4: STATUS + שעות + תאריך (שובץ 4-6 14/6)
+    for m in re.finditer(r'(?:מוקלד|תואם|שובץ|אושר|אישר|נקבע)\s+' + HOURS_RE + r'\s+(\d{1,2}/\d{1,2})', n):
+        candidates.append((normalize_date(m.group(2)), normalize_hours(m.group(1)), 4))
+    # עדיפות 3: היום/ירד להיום + שעות
+    for m in re.finditer(r'(?:' + today_pat + r')\s*' + HOURS_RE, text, re.IGNORECASE):
+        candidates.append((msg_ddmm, normalize_hours(m.group(1)), 3))
+    for m in re.finditer(HOURS_RE + r'\s+(?:' + today_pat + r')', text, re.IGNORECASE):
+        candidates.append((msg_ddmm, normalize_hours(m.group(1)), 3))
+    # עדיפות 3: מחר + שעות
+    for m in re.finditer(r'(?:התקנה\s+ל)?מחר\s+' + HOURS_RE, text):
+        tom = ddmm_offset(msg_ddmm, 1)
+        if tom: candidates.append((tom, normalize_hours(m.group(1)), 3))
+    # עדיפות 2: תאריך + שעות גרידא
+    for m in re.finditer(r'(\d{1,2}/\d{1,2})\s+' + HOURS_RE, n):
+        candidates.append((normalize_date(m.group(1)), normalize_hours(m.group(2)), 2))
+    for m in re.finditer(HOURS_RE + r'\s+(\d{1,2}/\d{1,2})', n):
+        candidates.append((normalize_date(m.group(2)), normalize_hours(m.group(1)), 2))
+    # עדיפות 1: תאריך לבד (צריך להזיז ל1.6)
+    for m in re.finditer(r'(\d{1,2}/\d{1,2})', n):
+        d = normalize_date(m.group(1))
+        candidates.append((d, '', 1))
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: x[2], reverse=True)
+    return candidates[0]
+
+
 def parse_sale_from_thread(messages, thread_id):
     full_text = ''
     first_subject = ''
@@ -260,70 +302,88 @@ def parse_sale_from_thread(messages, thread_id):
         all_msgs.append({'i': i, 'snippet': snippet, 'date_full': date_full,
                          'date_ddmm': date_ddmm, 'dt': msg_dt})
 
+    # זהה thread מכירה — מילת מפתח או מספר לקוח
     sale_kw = ['תואם','לאשר חוזה','ממירים','שובץ','להקים','ממיר','מוקלד',
-               'אישר','אושר','הוק','לעדכן לקוח','ירד להיום','ירדה להיום','ההתקנה להיום']
-    if not any(k in full_text for k in sale_kw): return None
+               'אישר','אושר','הוק','לעדכן לקוח','ירד להיום','ירדה להיום','ההתקנה להיום',
+               'דאבל יס','דאבל סטינג','סיבים']
+    has_cid = bool(re.search(r'\b30\d{5}\b', full_text))
+    if not any(k in full_text for k in sale_kw) and not has_cid:
+        return None
 
+    # שם מהנושא
     subj_clean = re.sub(r'^(Re|Fwd|FW|RE):\s*', '', first_subject, flags=re.IGNORECASE).strip()
     subj_clean = re.sub(r'[-–].*', '', subj_clean).strip()
     if not subj_clean or len(subj_clean) < 2: return None
 
+    # ביטול
     cancel_phrases = ['לא להקים','התחרטה','לבטל','ביטול','מבטל','בוטל','ביטל','מבטלת','ביטלה']
     is_cancelled = any(p in full_text for p in cancel_phrases)
     cancel_note = next((p for p in ['התחרטה','לא להקים','ביטל','ביטלה'] if p in full_text), '')
 
+    # מספר לקוח
     cid = ''
-    cid_m = re.search(r'לקוח\s+(\d{7})', full_text)
-    if cid_m: cid = cid_m.group(1)
+    cid_m = re.search(r'(?:לקוח|מס\s*לקוח)\s+(\d{7})', full_text)
+    if cid_m:
+        cid = cid_m.group(1)
+    else:
+        any_cid = re.search(r'\b(30\d{5})\b', full_text)
+        if any_cid: cid = any_cid.group(1)
 
-    all_updates = []
-    for msg in all_msgs:
-        for u in find_updates_in_snippet(msg['snippet'], msg['date_ddmm'], msg['dt']):
-            u['msg_i'] = msg['i']
-            all_updates.append(u)
+    # ── לב המנוע: עבור על המיילים לפי סדר זמן, קח תאריך מכל אחד ──
+    # התאריך מההודעה האחרונה (הכי מאוחרת) שמכילה תאריך = הסופי
+    install_date, install_hours = '', ''
+    first_date, first_hours = '', ''
+    sorted_msgs = sorted(all_msgs, key=lambda x: x['dt'] or datetime.min)
+    for msg in sorted_msgs:
+        b = best_date_in_message(msg['snippet'], msg['date_ddmm'], msg['dt'])
+        if b:
+            if not first_date:
+                first_date, first_hours = b[0], b[1]
+            install_date = b[0]
+            if b[1]: install_hours = b[1]  # שמור שעות אחרונות שאינן ריקות
 
-    kind_priority = {'today': 4, 'tomorrow': 3, 'recorded': 3, 'update': 2, 'explicit': 1}
-    all_updates.sort(key=lambda u: (u['dt'] or datetime.min, kind_priority.get(u['kind'], 0)))
+    # שינוי תאריך
+    has_change = bool(first_date and install_date and first_date != install_date)
+    change_note = f'שונה מ-{first_date} ל-{install_date}' if has_change else ''
 
-    install_date, install_hours, has_change, change_note, latest_kind = '', '', False, '', ''
-    if all_updates:
-        first_u, latest_u = all_updates[0], all_updates[-1]
-        install_date = latest_u['date']
-        install_hours = latest_u['hours']
-        latest_kind = latest_u['kind']
-        if first_u['date'] != latest_u['date'] or first_u['hours'] != latest_u['hours']:
-            has_change = True
-            change_note = f"שונה מ-{first_u['date']} {first_u['hours']} ל-{latest_u['date']} {latest_u['hours']}"
-
-    if is_cancelled: status = 'בוטל'
-    elif latest_kind in ('today','tomorrow','recorded','update') or \
-         any(w in full_text for w in ['מוקלד','אושר','אישר','לעדכן לקוח']):
+    # סטטוס
+    if is_cancelled:
+        status = 'בוטל'
+    elif any(w in full_text for w in ['מוקלד','אושר','אישר','לעדכן לקוח']):
         status = 'מוקלד + הוק' if 'הוק' in full_text else 'מוקלד'
-    elif 'לאשר חוזה' in full_text and 'הוק' in full_text: status = 'לאשר חוזה + הוק'
-    elif 'לאשר חוזה' in full_text: status = 'לאשר חוזה'
-    elif 'שובץ' in full_text: status = 'שובץ'
-    else: status = 'בהקדם'
+    elif 'לאשר חוזה' in full_text and 'הוק' in full_text:
+        status = 'לאשר חוזה + הוק'
+    elif 'לאשר חוזה' in full_text:
+        status = 'לאשר חוזה'
+    elif 'שובץ' in full_text or install_date:
+        status = 'שובץ'
+    else:
+        status = 'בהקדם'
 
+    # ממירים
     mirrors = 0
     mm = re.search(r'(\d+)\s*ממירים?', full_text)
-    if mm: mirrors = int(mm.group(1))
+    if mm:
+        mirrors = int(mm.group(1))
+    elif 'טריפל' in full_text: mirrors = 3
+    elif 'דאבל' in full_text: mirrors = 2
 
-    # installMonth = לפי תאריך ההתקנה (לא תאריך המכירה!)
-    # אם נמכר במאי והתקנה ביוני → ייראה ביוני
+    # חודש לפי תאריך התקנה
     install_month = ''
     if install_date and install_date not in ('—', 'ממתין', ''):
         parts = install_date.split('/')
         if len(parts) == 2:
             try: install_month = f'{int(parts[1]):02d}/2026'
             except: pass
-    
-    # אם אין תאריך התקנה — השתמש בחודש המכירה
-    sale_date = all_msgs[0]['date_full'] if all_msgs else ''
+
+    sale_date = sorted_msgs[0]['date_full'] if sorted_msgs else ''
     if not install_month and sale_date:
-        sale_parts = sale_date.split('/')
-        if len(sale_parts) >= 2:
-            try: install_month = f'{int(sale_parts[1]):02d}/2026'
+        sp = sale_date.split('/')
+        if len(sp) >= 2:
+            try: install_month = f'{int(sp[1]):02d}/2026'
             except: pass
+
+    if not install_date: install_date = 'ממתין'
 
     return {'name': subj_clean, 'customerId': cid, 'saleDate': sale_date,
             'installDate': install_date, 'installMonth': install_month,
@@ -331,6 +391,7 @@ def parse_sale_from_thread(messages, thread_id):
             'hasChange': has_change, 'changeNote': change_note,
             'isCancelled': is_cancelled, 'cancelNote': cancel_note,
             'isToday': False, 'isApril': False, 'threadId': thread_id}
+
 
 @app.route('/api/scan')
 def scan():
