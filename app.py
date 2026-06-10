@@ -51,6 +51,7 @@ def init_db():
 
 @app.route("/login")
 def login():
+    from urllib.parse import urlencode
     params = {
         "client_id": GOOGLE_CLIENT_ID,
         "redirect_uri": REDIRECT_URI,
@@ -59,7 +60,7 @@ def login():
         "access_type": "offline",
         "prompt": "consent",
     }
-    url = "https://accounts.google.com/o/oauth2/v2/auth?" + "&".join(f"{k}={v}" for k,v in params.items())
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
     return redirect(url)
 
 @app.route("/oauth/callback")
