@@ -167,11 +167,12 @@ THREADS:
 
 Return ONLY JSON array, null for non-sales:
 [{{"thread_id":"...","name":"...","customer_id":"...","sale_date":"YYYY-MM-DD","install_date":"YYYY-MM-DD","install_hours":"8-10","converters":2,"package":"...","status":"waiting","contract_ok":false,"notes":"..."}}]"""
-    resp = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1000,
-        messages=[{"role":"user","content":prompt}]
-    )
+resp = client.messages.create(
+    model="claude-haiku-4-5",
+    max_tokens=1000,
+    messages=[{"role":"user","content":prompt}],
+    timeout=30.0
+)
     raw = resp.content[0].text.strip()
     raw = re.sub(r"^```json\s*","",raw)
     raw = re.sub(r"\s*```$","",raw)
