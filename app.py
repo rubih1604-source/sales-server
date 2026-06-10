@@ -5,6 +5,7 @@ import sqlite3
 import anthropic
 import requests as req
 from datetime import datetime, date, timedelta
+from urllib.parse import urlencode
 from flask import Flask, redirect, request, session, jsonify, render_template
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -19,12 +20,14 @@ REDIRECT_URI         = os.environ.get("REDIRECT_URI", "http://localhost:5000/oau
 DB_PATH              = os.environ.get("DB_PATH", "sales.db")
 
 SCOPES = "openid email https://www.googleapis.com/auth/gmail.readonly"
-OPS_SENDERS = ["oshrityes2901@gmail.com","oritapiro22@gmail.com","avielv014@gmail.com"]
+OPS_SENDERS = ["oshrityes2901@gmail.com", "oritapiro22@gmail.com", "avielv014@gmail.com"]
+
 
 def get_db():
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     return db
+
 
 def init_db():
     db = get_db()
@@ -49,9 +52,9 @@ def init_db():
     db.commit()
     db.close()
 
+
 @app.route("/login")
 def login():
-    from urllib.parse import urlencode
     params = {
         "client_id": GOOGLE_CLIENT_ID,
         "redirect_uri": REDIRECT_URI,
@@ -62,6 +65,7 @@ def login():
     }
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
     return redirect(url)
+
 
 @app.route("/oauth/callback")
 def oauth_callback():
@@ -79,8 +83,9 @@ def oauth_callback():
     if "access_token" not in tokens:
         return f"Token error: {tokens}", 400
     session["access_token"]  = tokens["access_token"]
-    session["refresh_token"] = tokens.get("refresh_token","")
+    session["refresh_token"] = tokens.get("refresh_token", "")
     return redirect("/")
+
 
 def get_gmail():
     if "access_token" not in session:
@@ -94,6 +99,7 @@ def get_gmail():
     )
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
+
 def fetch_threads(gmail, days_back=90, page_token=None):
     after = (date.today() - timedelta(days=days_back)).strftime("%Y/%m/%d")
     query = (
@@ -101,39 +107,44 @@ def fetch_threads(gmail, days_back=90, page_token=None):
         "({from:oshrityes2901@gmail.com OR from:oritapiro22@gmail.com OR from:avielv014@gmail.com} לקוח) OR "
         f"(after:{after} from:rubih1604@gmail.com to:oshrityes2901@gmail.com)"
     )
-    params = {"userId":"me","q":query,"maxResults":50}
+    params = {"userId": "me", "q": query, "maxResults": 50}
     if page_token:
         params["pageToken"] = page_token
+
     resp = gmail.users().threads().list(**params).execute()
-    threads = resp.get("threads",[])
+    threads = resp.get("threads", [])
     next_page = resp.get("nextPageToken")
     results = []
+
     for t in threads:
         full = gmail.users().threads().get(
             userId="me", id=t["id"], format="metadata",
-            metadataHeaders=["Subject","From","Date"]
+            metadataHeaders=["Subject", "From", "Date"]
         ).execute()
-        msgs = full.get("messages",[])
+        msgs = full.get("messages", [])
         if not msgs:
             continue
+
         subject = ""
         sale_date_raw = ""
-        for h in msgs[0].get("payload",{}).get("headers",[]):
+        for h in msgs[0].get("payload", {}).get("headers", []):
             if h["name"] == "Subject":
-                subject = h["value"].replace("Re: ","").replace("Fwd: ","").strip()
+                subject = h["value"].replace("Re: ", "").replace("Fwd: ", "").strip()
             if h["name"] == "Date":
                 sale_date_raw = h["value"]
+
         all_snippets = []
         latest_ops = ""
         for msg in msgs:
-            snip = msg.get("snippet","")
+            snip = msg.get("snippet", "")
             all_snippets.append(snip)
             sender = ""
-            for h in msg.get("payload",{}).get("headers",[]):
+            for h in msg.get("payload", {}).get("headers", []):
                 if h["name"] == "From":
                     sender = h["value"]
             if any(op in sender for op in OPS_SENDERS):
                 latest_ops = snip
+
         results.append({
             "thread_id": t["id"],
             "subject": subject,
@@ -141,7 +152,9 @@ def fetch_threads(gmail, days_back=90, page_token=None):
             "latest_ops_snippet": latest_ops,
             "all_snippets": " ||| ".join(all_snippets[-6:]),
         })
+
     return results, next_page
+
 
 def analyze_batch(threads_data, current_month):
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -157,7 +170,7 @@ RULES:
 2. LATEST_OPS_MSG is ground truth.
 3. installDate: from תואם DD/MM or שובץ DD/MM - MOST RECENT if rescheduled. Year 2026.
 4. contractApproved: true if אישר/אישרה/מוקלד anywhere.
-5. status: cancelled→ביטול/נשלח לביטול/לא ניתן להקים | recorded→מוקלד | approved→אישר/אישרה | sent→דוור/שיבוץ | waiting→לאשר חוזה | null→not a sale
+5. status: cancelled=ביטול/נשלח לביטול/לא ניתן להקים | recorded=מוקלד | approved=אישר/אישרה | sent=דוור/שיבוץ | waiting=לאשר חוזה | null=not a sale
 6. converters: int before ממירים
 7. package: דאבל יס פלוס/דאבל יס/רק יס/דאבל סטינג/דאבל סיבים/מסך בלבד/other
 8. notes: short Hebrew note if unusual
@@ -167,71 +180,85 @@ THREADS:
 
 Return ONLY JSON array, null for non-sales:
 [{{"thread_id":"...","name":"...","customer_id":"...","sale_date":"YYYY-MM-DD","install_date":"YYYY-MM-DD","install_hours":"8-10","converters":2,"package":"...","status":"waiting","contract_ok":false,"notes":"..."}}]"""
-resp = client.messages.create(
-    model="claude-haiku-4-5",
-    max_tokens=1000,
-    messages=[{"role":"user","content":prompt}],
-    timeout=30.0
-)
+
+    resp = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1000,
+        messages=[{"role": "user", "content": prompt}]
+    )
     raw = resp.content[0].text.strip()
-    raw = re.sub(r"^```json\s*","",raw)
-    raw = re.sub(r"\s*```$","",raw)
+    raw = re.sub(r"^```json\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw)
     try:
         return [r for r in json.loads(raw) if r]
-    except:
-        m = re.search(r"\[[\s\S]*\]",raw)
+    except Exception:
+        m = re.search(r"\[[\s\S]*\]", raw)
         if m:
-            return [r for r in json.loads(m.group()) if r]
+            try:
+                return [r for r in json.loads(m.group()) if r]
+            except Exception:
+                pass
         return []
+
 
 def sync_to_db(parsed, current_month):
     db = get_db()
     now = datetime.utcnow().isoformat()
-    stats = {"new":0,"updated":0,"unchanged":0}
+    stats = {"new": 0, "updated": 0, "unchanged": 0}
+
     for row in parsed:
         tid = row.get("thread_id")
         if not tid:
             continue
-        existing = db.execute("SELECT * FROM sales WHERE thread_id=?",(tid,)).fetchone()
+        existing = db.execute("SELECT * FROM sales WHERE thread_id=?", (tid,)).fetchone()
         install_date = row.get("install_date") or ""
+
         if existing is None:
             db.execute("""INSERT INTO sales
                 (thread_id,name,customer_id,sale_date,install_date,install_hours,
                  converters,package,status,contract_ok,notes,raw_snippet,last_scanned,updated_at)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (tid,row.get("name",""),row.get("customer_id",""),row.get("sale_date",""),
-                 install_date,row.get("install_hours",""),row.get("converters"),
-                 row.get("package",""),row.get("status","waiting"),
-                 1 if row.get("contract_ok") else 0,row.get("notes",""),"",now,now))
+                (tid, row.get("name",""), row.get("customer_id",""), row.get("sale_date",""),
+                 install_date, row.get("install_hours",""), row.get("converters"),
+                 row.get("package",""), row.get("status","waiting"),
+                 1 if row.get("contract_ok") else 0, row.get("notes",""), "", now, now))
             stats["new"] += 1
         else:
             changes = {}
             old_inst = existing["install_date"] or ""
             if install_date and install_date != old_inst:
                 changes["install_date"] = install_date
-                db.execute("INSERT INTO install_history (thread_id,old_date,new_date,changed_at,reason) VALUES (?,?,?,?,?)",
-                    (tid,old_inst,install_date,now,"סריקה אוטומטית"))
-            if row.get("status","") and row.get("status") != existing["status"]:
-                changes["status"] = row["status"]
+                db.execute(
+                    "INSERT INTO install_history (thread_id,old_date,new_date,changed_at,reason) VALUES (?,?,?,?,?)",
+                    (tid, old_inst, install_date, now, "סריקה אוטומטית")
+                )
+            new_status = row.get("status", "")
+            if new_status and new_status != existing["status"]:
+                changes["status"] = new_status
             new_c = 1 if row.get("contract_ok") else 0
             if new_c != existing["contract_ok"]:
                 changes["contract_ok"] = new_c
-            if row.get("notes","") and row.get("notes") != existing["notes"]:
-                changes["notes"] = row["notes"]
+            new_notes = row.get("notes", "")
+            if new_notes and new_notes != existing["notes"]:
+                changes["notes"] = new_notes
             if changes:
                 changes["updated_at"] = now
                 changes["last_scanned"] = now
                 set_clause = ", ".join(f"{k}=?" for k in changes)
-                db.execute(f"UPDATE sales SET {set_clause} WHERE thread_id=?",(*changes.values(),tid))
+                db.execute(f"UPDATE sales SET {set_clause} WHERE thread_id=?", (*changes.values(), tid))
                 stats["updated"] += 1
             else:
-                db.execute("UPDATE sales SET last_scanned=? WHERE thread_id=?",(now,tid))
+                db.execute("UPDATE sales SET last_scanned=? WHERE thread_id=?", (now, tid))
                 stats["unchanged"] += 1
-    db.execute("INSERT INTO scan_log (scanned_at,total,new_rows,updated,month_ctx) VALUES (?,?,?,?,?)",
-        (now,len(parsed),stats["new"],stats["updated"],current_month))
+
+    db.execute(
+        "INSERT INTO scan_log (scanned_at,total,new_rows,updated,month_ctx) VALUES (?,?,?,?,?)",
+        (now, len(parsed), stats["new"], stats["updated"], current_month)
+    )
     db.commit()
     db.close()
     return stats
+
 
 @app.route("/")
 def index():
@@ -240,11 +267,12 @@ def index():
         init_db()
     return render_template("index.html", logged_in=logged_in)
 
+
 @app.route("/api/scan", methods=["POST"])
 def api_scan():
     gmail = get_gmail()
     if not gmail:
-        return jsonify({"error":"not_logged_in"}), 401
+        return jsonify({"error": "not_logged_in"}), 401
     today = date.today()
     current_month = today.strftime("%Y-%m")
     body = request.get_json() or {}
@@ -267,23 +295,39 @@ def api_scan():
     db = get_db()
     total = db.execute("SELECT COUNT(*) FROM sales").fetchone()[0]
     db.close()
-    return jsonify({"ok":True,"scanned":len(all_parsed),"new":stats["new"],"updated":stats["updated"],"unchanged":stats["unchanged"],"total_in_db":total,"scan_month":current_month})
+    return jsonify({
+        "ok": True,
+        "scanned": len(all_parsed),
+        "new": stats["new"],
+        "updated": stats["updated"],
+        "unchanged": stats["unchanged"],
+        "total_in_db": total,
+        "scan_month": current_month
+    })
+
 
 @app.route("/api/sales")
 def api_sales():
     db = get_db()
-    month = request.args.get("month","")
-    status = request.args.get("status","")
-    search = request.args.get("q","")
+    month  = request.args.get("month", "")
+    status = request.args.get("status", "")
+    search = request.args.get("q", "")
     q = "SELECT * FROM sales WHERE 1=1"
     params = []
-    if month:   q += " AND install_date LIKE ?";  params.append(f"{month}%")
-    if status:  q += " AND status=?";              params.append(status)
-    if search:  q += " AND (name LIKE ? OR customer_id LIKE ?)"; params += [f"%{search}%",f"%{search}%"]
+    if month:
+        q += " AND install_date LIKE ?"
+        params.append(f"{month}%")
+    if status:
+        q += " AND status=?"
+        params.append(status)
+    if search:
+        q += " AND (name LIKE ? OR customer_id LIKE ?)"
+        params += [f"%{search}%", f"%{search}%"]
     q += " ORDER BY install_date DESC, sale_date DESC"
-    rows = db.execute(q,params).fetchall()
+    rows = db.execute(q, params).fetchall()
     db.close()
     return jsonify([dict(r) for r in rows])
+
 
 @app.route("/api/stats")
 def api_stats():
@@ -291,36 +335,59 @@ def api_stats():
     today = date.today()
     this_month = today.strftime("%Y-%m")
     last_month = (today.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+
     def count(where, params=[]):
-        return db.execute(f"SELECT COUNT(*) FROM sales WHERE {where}",params).fetchone()[0]
+        return db.execute(f"SELECT COUNT(*) FROM sales WHERE {where}", params).fetchone()[0]
+
     stats = {
-        "total":count("1=1"),"this_month":count("install_date LIKE ?",[f"{this_month}%"]),
-        "last_month":count("install_date LIKE ?",[f"{last_month}%"]),
-        "waiting":count("status='waiting'"),"approved":count("status='approved'"),
-        "recorded":count("status='recorded'"),"cancelled":count("status='cancelled'"),
-        "no_contract":count("contract_ok=0 AND status NOT IN ('cancelled','unknown')"),
-        "current_month":this_month,"last_month":last_month,
+        "total": count("1=1"),
+        "this_month": count("install_date LIKE ?", [f"{this_month}%"]),
+        "last_month": count("install_date LIKE ?", [f"{last_month}%"]),
+        "waiting": count("status='waiting'"),
+        "approved": count("status='approved'"),
+        "recorded": count("status='recorded'"),
+        "cancelled": count("status='cancelled'"),
+        "no_contract": count("contract_ok=0 AND status NOT IN ('cancelled','unknown')"),
+        "current_month": this_month,
+        "last_month": last_month,
     }
-    months = db.execute("SELECT substr(install_date,1,7) as m, COUNT(*) as cnt FROM sales WHERE install_date != '' GROUP BY m ORDER BY m DESC LIMIT 6").fetchall()
+    months = db.execute("""
+        SELECT substr(install_date,1,7) as m, COUNT(*) as cnt
+        FROM sales WHERE install_date != ''
+        GROUP BY m ORDER BY m DESC LIMIT 6
+    """).fetchall()
     stats["by_month"] = [dict(r) for r in months]
-    last_scan = db.execute("SELECT scanned_at,total,new_rows,updated FROM scan_log ORDER BY id DESC LIMIT 1").fetchone()
+    last_scan = db.execute(
+        "SELECT scanned_at,total,new_rows,updated FROM scan_log ORDER BY id DESC LIMIT 1"
+    ).fetchone()
     stats["last_scan"] = dict(last_scan) if last_scan else None
-    changes = db.execute("SELECT ih.*, s.name FROM install_history ih LEFT JOIN sales s ON s.thread_id=ih.thread_id ORDER BY ih.changed_at DESC LIMIT 10").fetchall()
+    changes = db.execute("""
+        SELECT ih.*, s.name FROM install_history ih
+        LEFT JOIN sales s ON s.thread_id=ih.thread_id
+        ORDER BY ih.changed_at DESC LIMIT 10
+    """).fetchall()
     stats["recent_changes"] = [dict(r) for r in changes]
     db.close()
     return jsonify(stats)
 
+
 @app.route("/api/months")
 def api_months():
     db = get_db()
-    rows = db.execute("SELECT DISTINCT substr(install_date,1,7) as m FROM sales WHERE install_date != '' ORDER BY m DESC").fetchall()
+    rows = db.execute("""
+        SELECT DISTINCT substr(install_date,1,7) as m
+        FROM sales WHERE install_date != ''
+        ORDER BY m DESC
+    """).fetchall()
     db.close()
     return jsonify([r["m"] for r in rows])
+
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/")
+
 
 if __name__ == "__main__":
     init_db()
