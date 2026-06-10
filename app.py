@@ -1,33 +1,28 @@
-import os
-import json
-import re
-import sqlite3
-import anthropic
+import os, json, re, sqlite3
 import requests as req
-from datetime import datetime, date, timedelta
+from flask import Flask, request, session, jsonify, redirect, render_template
 from urllib.parse import urlencode
-from flask import Flask, redirect, request, session, jsonify, render_template
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from datetime import datetime, date, timedelta
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret")
 
 GOOGLE_CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
-ANTHROPIC_API_KEY    = os.environ.get("ANTHROPIC_API_KEY")
 REDIRECT_URI         = os.environ.get("REDIRECT_URI", "http://localhost:5000/oauth/callback")
 DB_PATH              = os.environ.get("DB_PATH", "sales.db")
 
 SCOPES = "openid email https://www.googleapis.com/auth/gmail.readonly"
 OPS_SENDERS = ["oshrityes2901@gmail.com", "oritapiro22@gmail.com", "avielv014@gmail.com"]
 
+HOURS_RE = r'(\d{1,2}(?::\d{2})?[-–]\d{1,2}(?::\d{2})?)'
 
 def get_db():
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     return db
-
 
 def init_db():
     db = get_db()
@@ -38,7 +33,7 @@ def init_db():
         name TEXT, customer_id TEXT, sale_date TEXT,
         install_date TEXT, install_hours TEXT, converters INTEGER,
         package TEXT, status TEXT, contract_ok INTEGER DEFAULT 0,
-        notes TEXT, raw_snippet TEXT, last_scanned TEXT, updated_at TEXT
+        notes TEXT, last_scanned TEXT, updated_at TEXT
     );
     CREATE TABLE IF NOT EXISTS scan_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,7 +47,6 @@ def init_db():
     db.commit()
     db.close()
 
-
 @app.route("/login")
 def login():
     params = {
@@ -63,15 +57,13 @@ def login():
         "access_type": "offline",
         "prompt": "consent",
     }
-    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
-    return redirect(url)
-
+    return redirect("https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params))
 
 @app.route("/oauth/callback")
 def oauth_callback():
     code = request.args.get("code")
     if not code:
-        return "Login failed – no code", 400
+        return "Login failed", 400
     resp = req.post("https://oauth2.googleapis.com/token", data={
         "code": code,
         "client_id": GOOGLE_CLIENT_ID,
@@ -86,7 +78,6 @@ def oauth_callback():
     session["refresh_token"] = tokens.get("refresh_token", "")
     return redirect("/")
 
-
 def get_gmail():
     if "access_token" not in session:
         return None
@@ -99,107 +90,174 @@ def get_gmail():
     )
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
+def normalize_hours(h):
+    h = str(h).replace("–", "-").strip()
+    h = re.sub(r":00", "", h)
+    parts = h.split("-")
+    if len(parts) == 2:
+        try:
+            return f"{int(parts[0])}-{int(parts[1])}"
+        except:
+            pass
+    return h
 
-def fetch_threads(gmail, days_back=90, page_token=None):
-    after = (date.today() - timedelta(days=days_back)).strftime("%Y/%m/%d")
-    query = (
-        f"after:{after} "
-        "({from:oshrityes2901@gmail.com OR from:oritapiro22@gmail.com OR from:avielv014@gmail.com} לקוח) OR "
-        f"(after:{after} from:rubih1604@gmail.com to:oshrityes2901@gmail.com)"
-    )
-    params = {"userId": "me", "q": query, "maxResults": 50}
-    if page_token:
-        params["pageToken"] = page_token
+def normalize_date(d):
+    parts = str(d).strip().split("/")
+    if len(parts) == 2:
+        return f"{parts[0].zfill(2)}/{parts[1].zfill(2)}"
+    return str(d)
 
-    resp = gmail.users().threads().list(**params).execute()
-    threads = resp.get("threads", [])
-    next_page = resp.get("nextPageToken")
-    results = []
+def parse_install_from_text(text):
+    """חילוץ תאריך+שעות מטקסט עברי."""
+    n = text
+    n = re.sub(r"ב(\d{1,2}/\d{1,2})", r"\1", n)
+    n = re.sub(r"ל(\d{1,2}/\d{1,2})", r"\1", n)
+    n = re.sub(r"בין\s+", "", n)
+    n = re.sub(r"מתואם", "תואם", n)
+    n = re.sub(r"שיבוץ", "שובץ", n)
 
-    for t in threads:
-        full = gmail.users().threads().get(
-            userId="me", id=t["id"], format="metadata",
-            metadataHeaders=["Subject", "From", "Date"]
-        ).execute()
-        msgs = full.get("messages", [])
-        if not msgs:
-            continue
+    best_date = ""
+    best_hours = ""
 
-        subject = ""
-        sale_date_raw = ""
-        for h in msgs[0].get("payload", {}).get("headers", []):
-            if h["name"] == "Subject":
-                subject = h["value"].replace("Re: ", "").replace("Fwd: ", "").strip()
-            if h["name"] == "Date":
-                sale_date_raw = h["value"]
+    # תואם/שובץ DD/MM HH-HH
+    for m in re.finditer(r"(?:תואם|שובץ|מוקלד)\s+(\d{1,2}/\d{1,2})\s+" + HOURS_RE, n):
+        best_date = normalize_date(m.group(1))
+        best_hours = normalize_hours(m.group(2))
 
-        all_snippets = []
-        latest_ops = ""
-        for msg in msgs:
-            snip = msg.get("snippet", "")
-            all_snippets.append(snip)
-            sender = ""
-            for h in msg.get("payload", {}).get("headers", []):
-                if h["name"] == "From":
-                    sender = h["value"]
-            if any(op in sender for op in OPS_SENDERS):
-                latest_ops = snip
+    # לקוח XXXXXXX תואם DD/MM HH-HH
+    for m in re.finditer(r"לקוח\s+\d+\s+(?:תואם|שובץ)\s+(\d{1,2}/\d{1,2})\s+" + HOURS_RE, n):
+        best_date = normalize_date(m.group(1))
+        best_hours = normalize_hours(m.group(2))
 
-        results.append({
-            "thread_id": t["id"],
-            "subject": subject,
-            "sale_date_raw": sale_date_raw,
-            "latest_ops_snippet": latest_ops,
-            "all_snippets": " ||| ".join(all_snippets[-6:]),
-        })
+    # DD/MM HH-HH
+    if not best_date:
+        for m in re.finditer(r"(\d{1,2}/\d{1,2})\s+" + HOURS_RE, n):
+            best_date = normalize_date(m.group(1))
+            best_hours = normalize_hours(m.group(2))
 
-    return results, next_page
+    # HH-HH DD/MM
+    if not best_date:
+        for m in re.finditer(HOURS_RE + r"\s+(\d{1,2}/\d{1,2})", n):
+            best_date = normalize_date(m.group(2))
+            best_hours = normalize_hours(m.group(1))
 
+    return best_date, best_hours
 
-def analyze_batch(threads_data, current_month):
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    batch_text = "\n\n".join([
-        f"THREAD_ID: {t['thread_id']}\nSUBJECT: {t['subject']}\nSALE_DATE_RAW: {t['sale_date_raw']}\nLATEST_OPS_MSG: {t['latest_ops_snippet']}\nALL_SNIPPETS: {t['all_snippets']}"
-        for t in threads_data
-    ])
-    today_str = date.today().isoformat()
-    prompt = f"""Analyze Israeli YES telecom sales email threads for agent Rubi.
-Today: {today_str}. Month: {current_month}.
-RULES:
-1. Only real sales (customer name subject + install scheduling).
-2. LATEST_OPS_MSG is ground truth.
-3. installDate: from תואם DD/MM or שובץ DD/MM - MOST RECENT if rescheduled. Year 2026.
-4. contractApproved: true if אישר/אישרה/מוקלד anywhere.
-5. status: cancelled=ביטול/נשלח לביטול/לא ניתן להקים | recorded=מוקלד | approved=אישר/אישרה | sent=דוור/שיבוץ | waiting=לאשר חוזה | null=not a sale
-6. converters: int before ממירים
-7. package: דאבל יס פלוס/דאבל יס/רק יס/דאבל סטינג/דאבל סיבים/מסך בלבד/other
-8. notes: short Hebrew note if unusual
-
-THREADS:
-{batch_text}
-
-Return ONLY JSON array, null for non-sales:
-[{{"thread_id":"...","name":"...","customer_id":"...","sale_date":"YYYY-MM-DD","install_date":"YYYY-MM-DD","install_hours":"8-10","converters":2,"package":"...","status":"waiting","contract_ok":false,"notes":"..."}}]"""
-
-    resp = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    raw = resp.content[0].text.strip()
-    raw = re.sub(r"^```json\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
+def ddmm_to_iso(ddmm):
+    """14/06 → 2026-06-14"""
     try:
-        return [r for r in json.loads(raw) if r]
-    except Exception:
-        m = re.search(r"\[[\s\S]*\]", raw)
-        if m:
-            try:
-                return [r for r in json.loads(m.group()) if r]
-            except Exception:
-                pass
-        return []
+        parts = ddmm.split("/")
+        return f"2026-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+    except:
+        return ""
 
+def parse_thread(thread_id, messages):
+    """ניתוח thread עם regex – בלי AI."""
+    full_text = ""
+    first_subject = ""
+    sale_date_raw = ""
+
+    for i, msg in enumerate(messages):
+        hdrs = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
+        subj = hdrs.get("Subject", "")
+        if i == 0:
+            first_subject = subj
+            sale_date_raw = hdrs.get("Date", "")
+        full_text += subj + "\n" + msg.get("snippet", "") + "\n"
+
+    # בדוק שזו מכירה
+    sale_kw = ["תואם", "לאשר חוזה", "ממירים", "שובץ", "להקים", "מוקלד", "אישר"]
+    if not any(k in full_text for k in sale_kw):
+        return None
+
+    # שם לקוח מנושא
+    name = re.sub(r"^(Re|Fwd|FW|RE):\s*", "", first_subject, flags=re.IGNORECASE).strip()
+    name = re.sub(r"[-–].*", "", name).strip()
+    if not name or len(name) < 2:
+        return None
+
+    # מספר לקוח
+    customer_id = ""
+    m = re.search(r"לקוח\s+(\d{7})", full_text)
+    if m:
+        customer_id = m.group(1)
+
+    # ממירים
+    converters = 0
+    m = re.search(r"(\d+)\s*ממירים?", full_text)
+    if m:
+        converters = int(m.group(1))
+
+    # חבילה
+    package = "other"
+    for p in ["דאבל יס פלוס", "דאבל יס", "רק יס", "דאבל סטינג", "דאבל סיבים", "מסך בלבד"]:
+        if p in full_text:
+            package = p
+            break
+
+    # תאריך התקנה – מהודעת תפעול האחרונה
+    install_date_ddmm = ""
+    install_hours = ""
+    for msg in reversed(messages):
+        sender = ""
+        for h in msg.get("payload", {}).get("headers", []):
+            if h["name"] == "From":
+                sender = h["value"]
+        if any(op in sender for op in OPS_SENDERS):
+            snippet = msg.get("snippet", "")
+            d, h = parse_install_from_text(snippet)
+            if d:
+                install_date_ddmm = d
+                install_hours = h
+                break
+
+    # אם לא מצאנו בהודעת תפעול – חפש בכל הטקסט
+    if not install_date_ddmm:
+        install_date_ddmm, install_hours = parse_install_from_text(full_text)
+
+    install_date_iso = ddmm_to_iso(install_date_ddmm) if install_date_ddmm else ""
+
+    # סטטוס
+    cancel_kw = ["ביטול", "נשלח לביטול", "לא ניתן להקים", "בוטל", "ביטל", "ביטלה"]
+    if any(k in full_text for k in cancel_kw):
+        status = "cancelled"
+    elif "מוקלד" in full_text:
+        status = "recorded"
+    elif any(k in full_text for k in ["אישר", "אישרה"]):
+        status = "approved"
+    elif any(k in full_text for k in ["דוור", "שיבוץ נשלח", "שולחת שיבוץ"]):
+        status = "sent"
+    elif "לאשר חוזה" in full_text:
+        status = "waiting"
+    else:
+        status = "waiting"
+
+    # חוזה
+    contract_ok = 1 if any(k in full_text for k in ["אישר", "אישרה", "מוקלד"]) else 0
+
+    # תאריך מכירה
+    sale_date = ""
+    try:
+        from email.utils import parsedate
+        p = parsedate(sale_date_raw)
+        if p:
+            sale_date = f"{p[0]}-{p[1]:02d}-{p[2]:02d}"
+    except:
+        pass
+
+    return {
+        "thread_id": thread_id,
+        "name": name,
+        "customer_id": customer_id,
+        "sale_date": sale_date,
+        "install_date": install_date_iso,
+        "install_hours": install_hours,
+        "converters": converters,
+        "package": package,
+        "status": status,
+        "contract_ok": contract_ok,
+        "notes": "",
+    }
 
 def sync_to_db(parsed, current_month):
     db = get_db()
@@ -216,12 +274,12 @@ def sync_to_db(parsed, current_month):
         if existing is None:
             db.execute("""INSERT INTO sales
                 (thread_id,name,customer_id,sale_date,install_date,install_hours,
-                 converters,package,status,contract_ok,notes,raw_snippet,last_scanned,updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 converters,package,status,contract_ok,notes,last_scanned,updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (tid, row.get("name",""), row.get("customer_id",""), row.get("sale_date",""),
                  install_date, row.get("install_hours",""), row.get("converters"),
                  row.get("package",""), row.get("status","waiting"),
-                 1 if row.get("contract_ok") else 0, row.get("notes",""), "", now, now))
+                 row.get("contract_ok", 0), row.get("notes",""), now, now))
             stats["new"] += 1
         else:
             changes = {}
@@ -235,12 +293,9 @@ def sync_to_db(parsed, current_month):
             new_status = row.get("status", "")
             if new_status and new_status != existing["status"]:
                 changes["status"] = new_status
-            new_c = 1 if row.get("contract_ok") else 0
+            new_c = row.get("contract_ok", 0)
             if new_c != existing["contract_ok"]:
                 changes["contract_ok"] = new_c
-            new_notes = row.get("notes", "")
-            if new_notes and new_notes != existing["notes"]:
-                changes["notes"] = new_notes
             if changes:
                 changes["updated_at"] = now
                 changes["last_scanned"] = now
@@ -259,7 +314,6 @@ def sync_to_db(parsed, current_month):
     db.close()
     return stats
 
-
 @app.route("/")
 def index():
     logged_in = "access_token" in session
@@ -267,30 +321,47 @@ def index():
         init_db()
     return render_template("index.html", logged_in=logged_in)
 
-
 @app.route("/api/scan", methods=["POST"])
 def api_scan():
     gmail = get_gmail()
     if not gmail:
         return jsonify({"error": "not_logged_in"}), 401
+
     today = date.today()
     current_month = today.strftime("%Y-%m")
     body = request.get_json() or {}
     days_back = 180 if body.get("full") else 70
+    after = (today - timedelta(days=days_back)).strftime("%Y/%m/%d")
+
+    query = (
+        f"after:{after} "
+        "(from:oshrityes2901@gmail.com OR from:oritapiro22@gmail.com OR "
+        "from:avielv014@gmail.com OR to:oshrityes2901@gmail.com)"
+    )
+
+    results = gmail.users().messages().list(
+        userId="me", q=query, maxResults=200
+    ).execute()
+
+    threads_seen = set()
     all_parsed = []
-    page_token = None
-    page = 0
-    while True:
-        threads, next_page = fetch_threads(gmail, days_back=days_back, page_token=page_token)
-        page += 1
-        if not threads:
-            break
-        for i in range(0, len(threads), 15):
-            parsed = analyze_batch(threads[i:i+15], current_month)
-            all_parsed.extend(parsed)
-        page_token = next_page
-        if not next_page or page >= 4:
-            break
+
+    for msg in results.get("messages", []):
+        tid = msg["threadId"]
+        if tid in threads_seen:
+            continue
+        threads_seen.add(tid)
+        try:
+            thread = gmail.users().threads().get(
+                userId="me", id=tid, format="metadata",
+                metadataHeaders=["Subject", "From", "Date"]
+            ).execute()
+            sale = parse_thread(tid, thread.get("messages", []))
+            if sale:
+                all_parsed.append(sale)
+        except:
+            continue
+
     stats = sync_to_db(all_parsed, current_month)
     db = get_db()
     total = db.execute("SELECT COUNT(*) FROM sales").fetchone()[0]
@@ -304,7 +375,6 @@ def api_scan():
         "total_in_db": total,
         "scan_month": current_month
     })
-
 
 @app.route("/api/sales")
 def api_sales():
@@ -328,7 +398,6 @@ def api_sales():
     db.close()
     return jsonify([dict(r) for r in rows])
 
-
 @app.route("/api/stats")
 def api_stats():
     db = get_db()
@@ -347,7 +416,7 @@ def api_stats():
         "approved": count("status='approved'"),
         "recorded": count("status='recorded'"),
         "cancelled": count("status='cancelled'"),
-        "no_contract": count("contract_ok=0 AND status NOT IN ('cancelled','unknown')"),
+        "no_contract": count("contract_ok=0 AND status NOT IN ('cancelled')"),
         "current_month": this_month,
         "last_month": last_month,
     }
@@ -370,7 +439,6 @@ def api_stats():
     db.close()
     return jsonify(stats)
 
-
 @app.route("/api/months")
 def api_months():
     db = get_db()
@@ -382,12 +450,10 @@ def api_months():
     db.close()
     return jsonify([r["m"] for r in rows])
 
-
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/")
-
 
 if __name__ == "__main__":
     init_db()
