@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from datetime import datetime, date, timedelta
+from email.utils import parsedate
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret")
@@ -16,8 +17,14 @@ DB_PATH              = os.environ.get("DB_PATH", "sales.db")
 
 SCOPES = "openid email https://www.googleapis.com/auth/gmail.readonly"
 OPS_SENDERS = ["oshrityes2901@gmail.com", "oritapiro22@gmail.com", "avielv014@gmail.com"]
-
 HOURS_RE = r'(\d{1,2}(?::\d{2})?[-–]\d{1,2}(?::\d{2})?)'
+
+# מילות ביטול – כולל אופס
+CANCEL_KW = [
+    "אופס", "איפסנו", "בוטל", "ביטול", "נשלח לביטול", "לא ניתן להקים",
+    "ביטל", "ביטלה", "לבטל", "התחרטה", "התחרט", "לא להקים",
+    "קיימת הזמנה ללקוח נשלח לביטול"
+]
 
 def get_db():
     db = sqlite3.connect(DB_PATH)
@@ -101,149 +108,151 @@ def normalize_hours(h):
             pass
     return h
 
-def normalize_date(d):
+def normalize_date_ddmm(d):
     parts = str(d).strip().split("/")
     if len(parts) == 2:
         return f"{parts[0].zfill(2)}/{parts[1].zfill(2)}"
     return str(d)
 
-def parse_install_from_text(text):
-    """חילוץ תאריך+שעות מטקסט עברי."""
-    n = text
-    n = re.sub(r"ב(\d{1,2}/\d{1,2})", r"\1", n)
-    n = re.sub(r"ל(\d{1,2}/\d{1,2})", r"\1", n)
-    n = re.sub(r"בין\s+", "", n)
-    n = re.sub(r"מתואם", "תואם", n)
-    n = re.sub(r"שיבוץ", "שובץ", n)
-
-    best_date = ""
-    best_hours = ""
-
-    # תואם/שובץ DD/MM HH-HH
-    for m in re.finditer(r"(?:תואם|שובץ|מוקלד)\s+(\d{1,2}/\d{1,2})\s+" + HOURS_RE, n):
-        best_date = normalize_date(m.group(1))
-        best_hours = normalize_hours(m.group(2))
-
-    # לקוח XXXXXXX תואם DD/MM HH-HH
-    for m in re.finditer(r"לקוח\s+\d+\s+(?:תואם|שובץ)\s+(\d{1,2}/\d{1,2})\s+" + HOURS_RE, n):
-        best_date = normalize_date(m.group(1))
-        best_hours = normalize_hours(m.group(2))
-
-    # DD/MM HH-HH
-    if not best_date:
-        for m in re.finditer(r"(\d{1,2}/\d{1,2})\s+" + HOURS_RE, n):
-            best_date = normalize_date(m.group(1))
-            best_hours = normalize_hours(m.group(2))
-
-    # HH-HH DD/MM
-    if not best_date:
-        for m in re.finditer(HOURS_RE + r"\s+(\d{1,2}/\d{1,2})", n):
-            best_date = normalize_date(m.group(2))
-            best_hours = normalize_hours(m.group(1))
-
-    return best_date, best_hours
-
 def ddmm_to_iso(ddmm):
-    """14/06 → 2026-06-14"""
     try:
         parts = ddmm.split("/")
         return f"2026-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
     except:
         return ""
 
+def parse_install_from_text(text):
+    """חילוץ תאריך+שעות מטקסט – מחזיר הכל ולוקח האחרון."""
+    n = text
+    n = re.sub(r"ב(\d{1,2}/\d{1,2})", r"\1", n)
+    n = re.sub(r"ל(\d{1,2}/\d{1,2})", r"\1", n)
+    n = re.sub(r"בין\s+", "", n)
+    n = re.sub(r"מתואם", "תואם", n)
+
+    results = []
+
+    # תואם/שובץ DD/MM HH-HH
+    for m in re.finditer(r"(?:תואם|שובץ|מוקלד)\s+(\d{1,2}/\d{1,2})\s+" + HOURS_RE, n):
+        results.append((normalize_date_ddmm(m.group(1)), normalize_hours(m.group(2))))
+
+    # לקוח XXXXXXX תואם DD/MM HH-HH
+    for m in re.finditer(r"לקוח\s+\d+\s+(?:תואם|שובץ)\s+(\d{1,2}/\d{1,2})\s+" + HOURS_RE, n):
+        results.append((normalize_date_ddmm(m.group(1)), normalize_hours(m.group(2))))
+
+    # DD/MM HH-HH
+    for m in re.finditer(r"(\d{1,2}/\d{1,2})\s+" + HOURS_RE, n):
+        results.append((normalize_date_ddmm(m.group(1)), normalize_hours(m.group(2))))
+
+    # HH-HH DD/MM
+    for m in re.finditer(HOURS_RE + r"\s+(\d{1,2}/\d{1,2})", n):
+        results.append((normalize_date_ddmm(m.group(2)), normalize_hours(m.group(1))))
+
+    if results:
+        return results[-1]  # האחרון = המעודכן ביותר
+    return "", ""
+
+def parse_sale_date(date_str):
+    try:
+        p = parsedate(date_str)
+        if p:
+            return f"{p[0]}-{p[1]:02d}-{p[2]:02d}"
+    except:
+        pass
+    return ""
+
 def parse_thread(thread_id, messages):
-    """ניתוח thread עם regex – בלי AI."""
+    """ניתוח thread – סטטוס לפי המייל האחרון של תפעול."""
+    if not messages:
+        return None
+
     full_text = ""
     first_subject = ""
     sale_date_raw = ""
 
+    # מצא את הודעת התפעול האחרונה
+    last_ops_snippet = ""
+    last_ops_found = False
+
     for i, msg in enumerate(messages):
         hdrs = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
         subj = hdrs.get("Subject", "")
+        sender = hdrs.get("From", "")
         if i == 0:
             first_subject = subj
             sale_date_raw = hdrs.get("Date", "")
-        full_text += subj + "\n" + msg.get("snippet", "") + "\n"
+        snippet = msg.get("snippet", "")
+        full_text += subj + "\n" + snippet + "\n"
+
+        # שמור את המייל האחרון של תפעול
+        if any(op in sender for op in OPS_SENDERS):
+            last_ops_snippet = snippet
+            last_ops_found = True
 
     # בדוק שזו מכירה
-    sale_kw = ["תואם", "לאשר חוזה", "ממירים", "שובץ", "להקים", "מוקלד", "אישר"]
+    sale_kw = ["תואם", "לאשר חוזה", "ממירים", "שובץ", "להקים", "מוקלד", "אישר", "שיבוץ"]
     if not any(k in full_text for k in sale_kw):
         return None
 
-    # שם לקוח מנושא
+    # שם לקוח
     name = re.sub(r"^(Re|Fwd|FW|RE):\s*", "", first_subject, flags=re.IGNORECASE).strip()
     name = re.sub(r"[-–].*", "", name).strip()
     if not name or len(name) < 2:
         return None
 
-    # מספר לקוח
+    # מספר לקוח – מכל הטקסט
     customer_id = ""
     m = re.search(r"לקוח\s+(\d{7})", full_text)
     if m:
         customer_id = m.group(1)
 
-    # ממירים
+    # ממירים – מכל הטקסט
     converters = 0
     m = re.search(r"(\d+)\s*ממירים?", full_text)
     if m:
         converters = int(m.group(1))
 
-    # חבילה
+    # חבילה – מכל הטקסט
     package = "other"
     for p in ["דאבל יס פלוס", "דאבל יס", "רק יס", "דאבל סטינג", "דאבל סיבים", "מסך בלבד"]:
         if p in full_text:
             package = p
             break
 
-    # תאריך התקנה – מהודעת תפעול האחרונה
+    # ═══ סטטוס – לפי המייל האחרון של תפעול בלבד ═══
+    check_text = last_ops_snippet if last_ops_found else full_text
+
+    if any(k in check_text for k in CANCEL_KW):
+        status = "cancelled"
+    elif "מוקלד" in check_text:
+        status = "recorded"
+    elif any(k in check_text for k in ["אישר", "אישרה"]):
+        status = "approved"
+    elif any(k in check_text for k in ["דוור", "שיבוץ נשלח", "שולחת שיבוץ", "שובץ"]):
+        status = "sent"
+    elif "לאשר חוזה" in check_text:
+        status = "waiting"
+    else:
+        status = "waiting"
+
+    # חוזה – מכל הטקסט
+    contract_ok = 1 if any(k in full_text for k in ["אישר", "אישרה", "מוקלד"]) else 0
+    if status == "cancelled":
+        contract_ok = 0
+
+    # ═══ תאריך התקנה – מהמייל האחרון של תפעול ═══
     install_date_ddmm = ""
     install_hours = ""
-    for msg in reversed(messages):
-        sender = ""
-        for h in msg.get("payload", {}).get("headers", []):
-            if h["name"] == "From":
-                sender = h["value"]
-        if any(op in sender for op in OPS_SENDERS):
-            snippet = msg.get("snippet", "")
-            d, h = parse_install_from_text(snippet)
-            if d:
-                install_date_ddmm = d
-                install_hours = h
-                break
 
-    # אם לא מצאנו בהודעת תפעול – חפש בכל הטקסט
+    if last_ops_found:
+        install_date_ddmm, install_hours = parse_install_from_text(last_ops_snippet)
+
+    # אם לא נמצא בתפעול – חפש בכל הטקסט
     if not install_date_ddmm:
         install_date_ddmm, install_hours = parse_install_from_text(full_text)
 
     install_date_iso = ddmm_to_iso(install_date_ddmm) if install_date_ddmm else ""
 
-    # סטטוס
-    cancel_kw = ["ביטול", "נשלח לביטול", "לא ניתן להקים", "בוטל", "ביטל", "ביטלה"]
-    if any(k in full_text for k in cancel_kw):
-        status = "cancelled"
-    elif "מוקלד" in full_text:
-        status = "recorded"
-    elif any(k in full_text for k in ["אישר", "אישרה"]):
-        status = "approved"
-    elif any(k in full_text for k in ["דוור", "שיבוץ נשלח", "שולחת שיבוץ"]):
-        status = "sent"
-    elif "לאשר חוזה" in full_text:
-        status = "waiting"
-    else:
-        status = "waiting"
-
-    # חוזה
-    contract_ok = 1 if any(k in full_text for k in ["אישר", "אישרה", "מוקלד"]) else 0
-
-    # תאריך מכירה
-    sale_date = ""
-    try:
-        from email.utils import parsedate
-        p = parsedate(sale_date_raw)
-        if p:
-            sale_date = f"{p[0]}-{p[1]:02d}-{p[2]:02d}"
-    except:
-        pass
+    sale_date = parse_sale_date(sale_date_raw)
 
     return {
         "thread_id": thread_id,
@@ -256,7 +265,7 @@ def parse_thread(thread_id, messages):
         "package": package,
         "status": status,
         "contract_ok": contract_ok,
-        "notes": "",
+        "notes": f"ביטול: {last_ops_snippet[:60]}" if status == "cancelled" else "",
     }
 
 def sync_to_db(parsed, current_month):
@@ -290,12 +299,12 @@ def sync_to_db(parsed, current_month):
                     "INSERT INTO install_history (thread_id,old_date,new_date,changed_at,reason) VALUES (?,?,?,?,?)",
                     (tid, old_inst, install_date, now, "סריקה אוטומטית")
                 )
-            new_status = row.get("status", "")
-            if new_status and new_status != existing["status"]:
-                changes["status"] = new_status
-            new_c = row.get("contract_ok", 0)
-            if new_c != existing["contract_ok"]:
-                changes["contract_ok"] = new_c
+            if row.get("status") and row.get("status") != existing["status"]:
+                changes["status"] = row["status"]
+            if row.get("contract_ok", 0) != existing["contract_ok"]:
+                changes["contract_ok"] = row.get("contract_ok", 0)
+            if row.get("notes","") and row.get("notes") != existing["notes"]:
+                changes["notes"] = row["notes"]
             if changes:
                 changes["updated_at"] = now
                 changes["last_scanned"] = now
@@ -393,7 +402,7 @@ def api_sales():
     if search:
         q += " AND (name LIKE ? OR customer_id LIKE ?)"
         params += [f"%{search}%", f"%{search}%"]
-    q += " ORDER BY install_date DESC, sale_date DESC"
+    q += " ORDER BY install_date ASC, sale_date ASC"
     rows = db.execute(q, params).fetchall()
     db.close()
     return jsonify([dict(r) for r in rows])
@@ -422,8 +431,8 @@ def api_stats():
     }
     months = db.execute("""
         SELECT substr(install_date,1,7) as m, COUNT(*) as cnt
-        FROM sales WHERE install_date != ''
-        GROUP BY m ORDER BY m DESC LIMIT 6
+        FROM sales WHERE install_date != '' AND install_date IS NOT NULL
+        GROUP BY m ORDER BY m DESC LIMIT 12
     """).fetchall()
     stats["by_month"] = [dict(r) for r in months]
     last_scan = db.execute(
@@ -444,7 +453,7 @@ def api_months():
     db = get_db()
     rows = db.execute("""
         SELECT DISTINCT substr(install_date,1,7) as m
-        FROM sales WHERE install_date != ''
+        FROM sales WHERE install_date != '' AND install_date IS NOT NULL
         ORDER BY m DESC
     """).fetchall()
     db.close()
