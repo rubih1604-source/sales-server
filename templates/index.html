@@ -6,366 +6,184 @@
 <title>מעקב מכירות YES – רובי</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@300;400;500;600;700&display=swap');
-
 :root {
-  --green:       #0D9E5C;
-  --green-dark:  #097a46;
-  --green-light: #e6f7f0;
-  --red:         #e53e3e;
-  --orange:      #d97706;
-  --blue:        #2563eb;
-  --purple:      #7c3aed;
-  --gray-50:     #f9fafb;
-  --gray-100:    #f3f4f6;
-  --gray-200:    #e5e7eb;
-  --gray-400:    #9ca3af;
-  --gray-600:    #4b5563;
-  --gray-800:    #1f2937;
-  --bg:          #f0f4f8;
+  --green:#0D9E5C; --green-dark:#097a46; --green-light:#e6f7f0;
+  --red:#e53e3e; --orange:#d97706; --gray-50:#f9fafb;
+  --gray-100:#f3f4f6; --gray-200:#e5e7eb; --gray-400:#9ca3af;
+  --gray-600:#4b5563; --gray-800:#1f2937; --bg:#f0f4f8;
 }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'IBM Plex Sans Hebrew',sans-serif; background:var(--bg); color:var(--gray-800); direction:rtl; }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: 'IBM Plex Sans Hebrew', sans-serif;
-  background: var(--bg);
-  color: var(--gray-800);
-  min-height: 100vh;
-  direction: rtl;
-}
-
-/* ─── HEADER ─── */
 header {
-  background: var(--gray-800);
-  color: white;
-  padding: 12px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  background:var(--gray-800); color:white; padding:12px 20px;
+  display:flex; align-items:center; justify-content:space-between;
+  position:sticky; top:0; z-index:200; box-shadow:0 2px 10px rgba(0,0,0,0.3);
 }
-
-.header-left { display: flex; align-items: center; gap: 12px; }
-.header-left h1 { font-size: 17px; font-weight: 600; }
+.header-left { display:flex; align-items:center; gap:12px; }
+.header-left h1 { font-size:17px; font-weight:600; }
 .logo-dot {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 0 3px rgba(13,158,92,0.3);
-  animation: pulse 2s infinite;
+  width:9px; height:9px; border-radius:50%; background:var(--green);
+  box-shadow:0 0 0 3px rgba(13,158,92,0.3);
+  animation:pulse 2s infinite;
 }
 @keyframes pulse {
-  0%,100% { box-shadow: 0 0 0 3px rgba(13,158,92,0.3); }
-  50%      { box-shadow: 0 0 0 6px rgba(13,158,92,0.1); }
+  0%,100%{box-shadow:0 0 0 3px rgba(13,158,92,0.3);}
+  50%{box-shadow:0 0 0 6px rgba(13,158,92,0.1);}
 }
-
-.header-right { display: flex; align-items: center; gap: 10px; }
-
+.header-right { display:flex; align-items:center; gap:10px; }
 .scan-btn {
-  background: var(--green);
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  transition: background 0.15s, transform 0.1s;
+  background:var(--green); color:white; border:none;
+  padding:8px 16px; border-radius:8px; font-family:inherit;
+  font-size:13px; font-weight:600; cursor:pointer;
+  display:flex; align-items:center; gap:7px; transition:all 0.15s;
 }
-.scan-btn:hover  { background: var(--green-dark); }
-.scan-btn:active { transform: scale(0.97); }
-.scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.scan-btn:hover { background:var(--green-dark); }
+.scan-btn:disabled { opacity:0.5; cursor:not-allowed; }
+.last-scan { font-size:11px; color:var(--gray-400); }
 
-.login-btn {
-  background: white;
-  color: var(--gray-800);
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
+#progressBar { height:3px; background:var(--gray-200); position:fixed; top:0; left:0; right:0; z-index:300; }
+#progressFill { height:100%; background:var(--green); width:0%; transition:width 0.4s; }
 
-.last-scan-info {
-  font-size: 11px;
-  color: var(--gray-400);
-}
+.container { max-width:1440px; margin:0 auto; padding:16px; }
 
-/* ─── PROGRESS ─── */
-#progressBar {
-  height: 3px;
-  background: var(--gray-200);
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  z-index: 300;
-}
-#progressFill {
-  height: 100%;
-  background: var(--green);
-  width: 0%;
-  transition: width 0.4s ease;
-  border-radius: 2px;
-}
-
-/* ─── MAIN ─── */
-.container { max-width: 1440px; margin: 0 auto; padding: 18px 16px; }
-
-/* ─── LOGIN SCREEN ─── */
+/* LOGIN */
 .login-screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 80vh;
-  text-align: center;
-  gap: 16px;
+  display:flex; flex-direction:column; align-items:center;
+  justify-content:center; min-height:80vh; text-align:center; gap:16px;
 }
-.login-screen h2 { font-size: 24px; font-weight: 700; }
-.login-screen p  { color: var(--gray-400); font-size: 15px; }
-
+.login-screen h2 { font-size:24px; font-weight:700; }
+.login-screen p { color:var(--gray-400); }
 .big-login-btn {
-  background: white;
-  border: 2px solid var(--green);
-  color: var(--green);
-  padding: 14px 32px;
-  border-radius: 12px;
-  font-family: inherit;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  text-decoration: none;
-  margin-top: 8px;
-  transition: all 0.15s;
+  background:white; border:2px solid var(--green); color:var(--green);
+  padding:14px 32px; border-radius:12px; font-family:inherit;
+  font-size:16px; font-weight:700; cursor:pointer; text-decoration:none;
+  transition:all 0.15s;
 }
-.big-login-btn:hover { background: var(--green); color: white; }
+.big-login-btn:hover { background:var(--green); color:white; }
 
-/* ─── STATS ─── */
+/* STATS */
 .stats-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  gap:10px; margin-bottom:16px;
 }
-
 .stat-card {
-  background: white;
-  border-radius: 12px;
-  padding: 14px 12px;
-  text-align: center;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  cursor: pointer;
-  transition: box-shadow 0.15s, transform 0.1s;
-  border: 2px solid transparent;
+  background:white; border-radius:12px; padding:12px;
+  text-align:center; box-shadow:0 1px 4px rgba(0,0,0,0.06);
+  cursor:pointer; border:2px solid transparent; transition:all 0.15s;
 }
-.stat-card:hover  { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); }
-.stat-card.active { border-color: var(--green); }
+.stat-card:hover { box-shadow:0 4px 12px rgba(0,0,0,0.1); transform:translateY(-1px); }
+.stat-num { font-size:24px; font-weight:700; color:var(--green); }
+.stat-label { font-size:11px; color:var(--gray-400); margin-top:3px; }
 
-.stat-num   { font-size: 26px; font-weight: 700; color: var(--green); line-height: 1; }
-.stat-label { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
+/* MONTH TABS */
+.month-tabs {
+  display:flex; gap:6px; overflow-x:auto; padding-bottom:4px;
+  margin-bottom:14px; scrollbar-width:none;
+}
+.month-tabs::-webkit-scrollbar { display:none; }
+.month-tab {
+  background:white; border:2px solid var(--gray-200);
+  color:var(--gray-600); padding:8px 16px; border-radius:20px;
+  font-family:inherit; font-size:13px; font-weight:600;
+  cursor:pointer; white-space:nowrap; transition:all 0.15s;
+  display:flex; align-items:center; gap:6px;
+}
+.month-tab:hover { border-color:var(--green); color:var(--green); }
+.month-tab.active {
+  background:var(--green); border-color:var(--green);
+  color:white;
+}
+.month-tab .cnt {
+  background:rgba(255,255,255,0.25); border-radius:10px;
+  padding:1px 7px; font-size:11px;
+}
+.month-tab:not(.active) .cnt {
+  background:var(--gray-100); color:var(--gray-600);
+}
 
-/* ─── CHANGES ALERT ─── */
+/* CHANGES ALERT */
 .changes-alert {
-  background: #fffbeb;
-  border: 1px solid #fcd34d;
-  border-radius: 10px;
-  padding: 12px 16px;
-  margin-bottom: 14px;
-  display: none;
+  background:#fffbeb; border:1px solid #fcd34d;
+  border-radius:10px; padding:12px 16px; margin-bottom:14px; display:none;
 }
-.changes-alert h4 { font-size: 13px; color: #92400e; margin-bottom: 6px; }
-.changes-alert ul { list-style: none; }
-.changes-alert li { font-size: 12px; color: #78350f; padding: 2px 0; }
+.changes-alert h4 { font-size:13px; color:#92400e; margin-bottom:6px; }
+.changes-alert li { font-size:12px; color:#78350f; padding:2px 0; list-style:none; }
 
-/* ─── TOOLBAR ─── */
+/* TOOLBAR */
 .toolbar {
-  background: white;
-  border-radius: 10px;
-  padding: 10px 14px;
-  margin-bottom: 14px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  background:white; border-radius:10px; padding:10px 14px;
+  margin-bottom:14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+  box-shadow:0 1px 4px rgba(0,0,0,0.06);
 }
-
 .toolbar input, .toolbar select {
-  font-family: inherit;
-  font-size: 13px;
-  padding: 6px 10px;
-  border: 1px solid var(--gray-200);
-  border-radius: 7px;
-  outline: none;
-  background: var(--gray-50);
-  color: var(--gray-800);
-  direction: rtl;
+  font-family:inherit; font-size:13px; padding:6px 10px;
+  border:1px solid var(--gray-200); border-radius:7px;
+  background:var(--gray-50); color:var(--gray-800); direction:rtl;
 }
-.toolbar input:focus, .toolbar select:focus {
-  border-color: var(--green);
-  background: white;
-}
-.toolbar input { min-width: 190px; }
-
-.results-count {
-  font-size: 12px;
-  color: var(--gray-400);
-  margin-right: auto;
+.toolbar input:focus, .toolbar select:focus { border-color:var(--green); background:white; outline:none; }
+.toolbar input { min-width:180px; }
+.results-count { font-size:12px; color:var(--gray-400); margin-right:auto; }
+.full-scan-btn {
+  font-family:inherit; font-size:11px; color:var(--gray-400);
+  background:none; border:none; cursor:pointer; text-decoration:underline;
 }
 
-/* ─── TABLE ─── */
-.table-wrap {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  overflow: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  min-width: 900px;
-}
-
-thead {
-  background: var(--gray-800);
-  color: white;
-  position: sticky;
-  top: 52px;
-  z-index: 10;
-}
-
+/* TABLE */
+.table-wrap { background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06); overflow:auto; }
+table { width:100%; border-collapse:collapse; font-size:13px; min-width:800px; }
+thead { background:var(--gray-800); color:white; position:sticky; top:52px; z-index:10; }
 thead th {
-  padding: 10px 10px;
-  text-align: right;
-  font-weight: 500;
-  font-size: 12px;
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.1s;
+  padding:10px; text-align:right; font-weight:500; font-size:12px;
+  white-space:nowrap; cursor:pointer; user-select:none;
 }
-thead th:hover { background: #374151; }
-thead th.sorted-asc::after  { content: " ↑"; }
-thead th.sorted-desc::after { content: " ↓"; }
+thead th:hover { background:#374151; }
+tbody tr { border-bottom:1px solid var(--gray-100); transition:background 0.1s; }
+tbody tr:hover { background:#f0f9f4; }
+tbody tr:last-child { border-bottom:none; }
+tbody tr.cancelled-row { background:#fff5f5; }
+tbody tr.cancelled-row:hover { background:#fee2e2; }
+td { padding:8px 10px; vertical-align:middle; white-space:nowrap; }
+.td-name { font-weight:600; }
+.td-num { font-family:monospace; font-size:12px; color:var(--gray-600); }
+.td-date { color:var(--gray-600); font-size:12px; }
+.td-date.today { color:var(--green); font-weight:700; }
 
-tbody tr {
-  border-bottom: 1px solid var(--gray-100);
-  transition: background 0.1s;
-}
-tbody tr:hover { background: #f0f9f4; }
-tbody tr:last-child { border-bottom: none; }
-tbody tr.month-header { background: var(--green-light); cursor: default; }
-tbody tr.month-header:hover { background: var(--green-light); }
-tbody tr.month-header td {
-  font-weight: 700;
-  font-size: 12px;
-  color: var(--green-dark);
-  padding: 6px 10px;
-  letter-spacing: 0.3px;
-}
-
-td {
-  padding: 8px 10px;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-
-.td-name     { font-weight: 600; }
-.td-num      { font-family: monospace; font-size: 12px; color: var(--gray-600); }
-.td-date     { color: var(--gray-600); font-size: 12px; }
-.td-date.highlight { color: var(--green); font-weight: 600; }
-
-/* status badge */
 .badge {
-  display: inline-flex; align-items: center;
-  font-size: 11px; font-weight: 600;
-  padding: 3px 8px; border-radius: 20px;
-  white-space: nowrap;
+  display:inline-flex; align-items:center; font-size:11px; font-weight:600;
+  padding:3px 8px; border-radius:20px; white-space:nowrap;
 }
-.b-waiting   { background: #fef3c7; color: #92400e; }
-.b-approved  { background: #d1fae5; color: #065f46; }
-.b-recorded  { background: #dbeafe; color: #1e40af; }
-.b-cancelled { background: #fee2e2; color: #991b1b; }
-.b-sent      { background: #ede9fe; color: #5b21b6; }
+.b-waiting   { background:#fef3c7; color:#92400e; }
+.b-approved  { background:#d1fae5; color:#065f46; }
+.b-recorded  { background:#dbeafe; color:#1e40af; }
+.b-cancelled { background:#fee2e2; color:#991b1b; }
+.b-sent      { background:#ede9fe; color:#5b21b6; }
 
-.contract-ok  { color: var(--green); font-size: 16px; font-weight: 700; }
-.contract-no  { color: var(--gray-200); font-size: 16px; }
+.contract-ok { color:var(--green); font-size:16px; font-weight:700; }
+.contract-no { color:var(--gray-200); font-size:16px; }
+.notes-cell { max-width:160px; overflow:hidden; text-overflow:ellipsis; font-size:11px; color:var(--gray-400); cursor:help; }
 
-.notes-cell {
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 11px;
-  color: var(--gray-400);
-  cursor: help;
-}
-
-.changed-date {
-  background: #fef3c7;
-  border-radius: 4px;
-  padding: 1px 4px;
-}
-
-/* empty / loading */
-.empty-row td, .loading-row td {
-  text-align: center;
-  padding: 50px;
-  color: var(--gray-400);
-}
-
+.empty-row td, .loading-row td { text-align:center; padding:50px; color:var(--gray-400); }
 .spinner {
-  display: inline-block;
-  width: 18px; height: 18px;
-  border: 2px solid var(--gray-200);
-  border-top-color: var(--green);
-  border-radius: 50%;
-  animation: spin 0.5s linear infinite;
-  vertical-align: middle; margin-left: 8px;
+  display:inline-block; width:18px; height:18px;
+  border:2px solid var(--gray-200); border-top-color:var(--green);
+  border-radius:50%; animation:spin 0.5s linear infinite; vertical-align:middle; margin-left:8px;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin { to{transform:rotate(360deg);} }
 
-/* ─── TOAST ─── */
 .toast {
-  position: fixed; bottom: 24px; left: 50%;
-  transform: translateX(-50%) translateY(20px);
-  background: var(--gray-800); color: white;
-  padding: 10px 20px; border-radius: 10px;
-  font-size: 13px; z-index: 999;
-  opacity: 0; transition: all 0.3s;
-  pointer-events: none; white-space: nowrap;
+  position:fixed; bottom:24px; left:50%;
+  transform:translateX(-50%) translateY(20px);
+  background:var(--gray-800); color:white;
+  padding:10px 20px; border-radius:10px; font-size:13px;
+  z-index:999; opacity:0; transition:all 0.3s; pointer-events:none;
 }
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.toast.green { background: var(--green); }
-.toast.red   { background: var(--red); }
-
-/* ─── SCAN LOG ─── */
-.scan-log-btn {
-  font-family: inherit; font-size: 11px;
-  color: var(--gray-400); background: none;
-  border: none; cursor: pointer; text-decoration: underline;
-}
-
-@media (max-width: 640px) {
-  .stats-row { grid-template-columns: repeat(3, 1fr); }
-  .stat-num  { font-size: 20px; }
-}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.toast.green { background:var(--green); }
+.toast.red   { background:var(--red); }
 </style>
 </head>
 <body>
-
 <div id="progressBar"><div id="progressFill"></div></div>
 
 <header>
@@ -375,20 +193,14 @@ td {
   </div>
   <div class="header-right">
     {% if logged_in %}
-      <span class="last-scan-info" id="lastScanInfo">טוען...</span>
+      <span class="last-scan" id="lastScanInfo"></span>
       <button class="scan-btn" id="scanBtn" onclick="startScan()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="1 4 1 10 7 10"/>
-          <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
-        </svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
         סרוק מיילים
       </button>
       <a href="/logout" style="color:var(--gray-400);font-size:12px;text-decoration:none;">יציאה</a>
     {% else %}
-      <a href="/login" class="login-btn">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.38-.12-.95-.22-2.4.04-3.44.24-.92 1.6-6.78 1.6-6.78s-.4-.82-.4-2.02c0-1.9 1.1-3.32 2.46-3.32 1.16 0 1.72.87 1.72 1.92 0 1.17-.74 2.92-1.13 4.54-.32 1.35.67 2.46 2 2.46 2.4 0 4.24-2.53 4.24-6.18 0-3.23-2.32-5.5-5.64-5.5-3.84 0-6.1 2.88-6.1 5.85 0 1.16.44 2.4 1 3.07.1.12.12.23.08.35l-.38 1.54c-.06.24-.2.3-.46.18-1.76-.82-2.86-3.4-2.86-5.48 0-4.44 3.22-8.52 9.3-8.52 4.88 0 8.68 3.48 8.68 8.12 0 4.84-3.05 8.74-7.28 8.74-1.42 0-2.76-.74-3.22-1.6l-.87 3.26c-.32 1.22-1.18 2.76-1.76 3.7A12 12 0 0 0 12 24c6.63 0 12-5.37 12-12S18.63 0 12 0z"/></svg>
-        התחבר עם Google
-      </a>
+      <a href="/login" style="background:white;color:#1f2937;padding:8px 16px;border-radius:8px;font-weight:600;text-decoration:none;font-size:13px;">התחבר עם Google</a>
     {% endif %}
   </div>
 </header>
@@ -398,37 +210,30 @@ td {
   <div class="login-screen">
     <div style="font-size:48px">📊</div>
     <h2>מעקב מכירות YES</h2>
-    <p>סנכרון אוטומטי של מכירות מהמיילים<br>לחיצה אחת = טבלה מעודכנת</p>
-    <a href="/login" class="big-login-btn">
-      🔐 התחבר עם חשבון Google
-    </a>
+    <p>סנכרון אוטומטי של מכירות מהמיילים</p>
+    <a href="/login" class="big-login-btn">🔐 התחבר עם Google</a>
   </div>
-
 {% else %}
 
-  <!-- Stats -->
+  <!-- STATS -->
   <div class="stats-row" id="statsRow">
-    <div class="stat-card" onclick="filterByStatus('')">
+    <div class="stat-card" onclick="filterStatus('')">
       <div class="stat-num" id="s-total">–</div>
       <div class="stat-label">סה"כ מכירות</div>
     </div>
-    <div class="stat-card" onclick="filterByMonth('this')">
-      <div class="stat-num" id="s-month">–</div>
-      <div class="stat-label" id="s-month-label">חודש נוכחי</div>
-    </div>
-    <div class="stat-card" onclick="filterByMonth('last')">
-      <div class="stat-num" id="s-last">–</div>
-      <div class="stat-label" id="s-last-label">חודש קודם</div>
-    </div>
-    <div class="stat-card" onclick="filterByStatus('waiting')">
+    <div class="stat-card" onclick="filterStatus('waiting')">
       <div class="stat-num" id="s-waiting">–</div>
       <div class="stat-label">ממתינים לחוזה</div>
     </div>
-    <div class="stat-card" onclick="filterByStatus('recorded')">
+    <div class="stat-card" onclick="filterStatus('approved')">
+      <div class="stat-num" id="s-approved">–</div>
+      <div class="stat-label">אישרו חוזה</div>
+    </div>
+    <div class="stat-card" onclick="filterStatus('recorded')">
       <div class="stat-num" id="s-recorded">–</div>
       <div class="stat-label">מוקלדים</div>
     </div>
-    <div class="stat-card" onclick="filterByStatus('cancelled')" style="--green:#e53e3e; --green-light:#fee2e2; --green-dark:#991b1b;">
+    <div class="stat-card" onclick="filterStatus('cancelled')">
       <div class="stat-num" id="s-cancelled" style="color:var(--red)">–</div>
       <div class="stat-label">בוטלו</div>
     </div>
@@ -438,18 +243,18 @@ td {
     </div>
   </div>
 
-  <!-- Date change alerts -->
+  <!-- DATE CHANGES ALERT -->
   <div class="changes-alert" id="changesAlert">
     <h4>⚡ שינויי תאריך התקנה בסריקה האחרונה</h4>
     <ul id="changesList"></ul>
   </div>
 
-  <!-- Toolbar -->
+  <!-- MONTH TABS -->
+  <div class="month-tabs" id="monthTabs"></div>
+
+  <!-- TOOLBAR -->
   <div class="toolbar">
     <input type="text" id="searchInput" placeholder="🔍 שם לקוח / מס' לקוח..." oninput="loadSales()">
-    <select id="filterMonth" onchange="loadSales()">
-      <option value="">כל החודשים</option>
-    </select>
     <select id="filterStatus" onchange="loadSales()">
       <option value="">כל הסטטוסים</option>
       <option value="waiting">ממתין לחוזה</option>
@@ -466,28 +271,29 @@ td {
       <option value="6">6 ממירים</option>
     </select>
     <span class="results-count" id="resultsCount"></span>
-    <button class="scan-log-btn" onclick="scanFull()">סריקה מלאה (6 חודשים)</button>
+    <button class="full-scan-btn" onclick="startScan(true)">סריקה מלאה (6 חודשים)</button>
   </div>
 
-  <!-- Table -->
+  <!-- TABLE -->
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th onclick="setSort('name')">שם לקוח</th>
-          <th onclick="setSort('customer_id')">מס' לקוח</th>
-          <th onclick="setSort('sale_date')">מכירה</th>
-          <th onclick="setSort('install_date')">התקנה</th>
+          <th>#</th>
+          <th>שם לקוח</th>
+          <th>מס' לקוח</th>
+          <th>תאריך מכירה</th>
+          <th>תאריך התקנה</th>
           <th>שעות</th>
-          <th onclick="setSort('converters')">ממירים</th>
+          <th>ממירים</th>
           <th>חבילה</th>
-          <th onclick="setSort('status')">סטטוס</th>
+          <th>סטטוס</th>
           <th style="text-align:center">חוזה</th>
           <th>הערות</th>
         </tr>
       </thead>
       <tbody id="tableBody">
-        <tr class="loading-row"><td colspan="10">טוען... <span class="spinner"></span></td></tr>
+        <tr class="loading-row"><td colspan="11">טוען... <span class="spinner"></span></td></tr>
       </tbody>
     </table>
   </div>
@@ -498,168 +304,143 @@ td {
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── STATE ───────────────────────────────────────────────────
-let sortKey = 'install_date';
-let sortDir = -1;
-let scanning = false;
-let allStats = {};
 const monthNames = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+let activeMonth = '';
+let allStats = {};
+let scanning = false;
 
 {% if logged_in %}
-// ─── INIT ────────────────────────────────────────────────────
 window.onload = () => {
   loadStats();
-  loadMonths();
-  loadSales();
 };
 
-// ─── SCAN ────────────────────────────────────────────────────
 async function startScan(full = false) {
   if (scanning) return;
   scanning = true;
   const btn = document.getElementById('scanBtn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> סורק...';
-  setProgress(10);
-
+  setProgress(20);
   try {
-    setProgress(30);
+    setProgress(50);
     const resp = await fetch('/api/scan', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({full})
     });
-    setProgress(80);
-
+    setProgress(85);
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'שגיאה');
-
     setProgress(100);
     await loadStats();
-    await loadSales();
-    showToast(`✅ נסרקו ${data.scanned} מכירות • ${data.new} חדשות • ${data.updated} עודכנו`, 'green');
+    showToast(`✅ ${data.scanned} מכירות • ${data.new} חדשות • ${data.updated} עודכנו`, 'green');
   } catch(e) {
     showToast('❌ ' + e.message, 'red');
   }
-
   scanning = false;
   btn.disabled = false;
   btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>סרוק מיילים`;
   setTimeout(() => setProgress(0), 600);
 }
 
-function scanFull() {
-  if (confirm('סריקה מלאה של 6 חודשים אחורה – עלולה לקחת כמה דקות. להמשיך?')) {
-    startScan(true);
-  }
-}
-
-// ─── STATS ───────────────────────────────────────────────────
 async function loadStats() {
   const data = await fetch('/api/stats').then(r => r.json());
   allStats = data;
+  document.getElementById('s-total').textContent     = data.total || 0;
+  document.getElementById('s-waiting').textContent   = data.waiting || 0;
+  document.getElementById('s-approved').textContent  = data.approved || 0;
+  document.getElementById('s-recorded').textContent  = data.recorded || 0;
+  document.getElementById('s-cancelled').textContent = data.cancelled || 0;
+  document.getElementById('s-nocontract').textContent= data.no_contract || 0;
 
-  document.getElementById('s-total').textContent    = data.total || 0;
-  document.getElementById('s-month').textContent    = data.this_month || 0;
-  document.getElementById('s-last').textContent     = data.last_month || 0;
-  document.getElementById('s-waiting').textContent  = data.waiting || 0;
-  document.getElementById('s-recorded').textContent = data.recorded || 0;
-  document.getElementById('s-cancelled').textContent= data.cancelled || 0;
-  document.getElementById('s-nocontract').textContent = data.no_contract || 0;
-
-  // Month labels
-  if (data.current_month) {
-    const [y,m] = data.current_month.split('-');
-    document.getElementById('s-month-label').textContent = monthNames[parseInt(m)] + ' ' + y;
-  }
-  if (data.last_month) {
-    const [y,m] = data.last_month.split('-');
-    document.getElementById('s-last-label').textContent = monthNames[parseInt(m)] + ' ' + y;
-  }
-
-  // Last scan
   if (data.last_scan) {
     const d = new Date(data.last_scan.scanned_at);
     document.getElementById('lastScanInfo').textContent =
-      `סריקה אחרונה: ${d.toLocaleDateString('he-IL')} ${d.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}`;
+      `סריקה: ${d.toLocaleDateString('he-IL')} ${d.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}`;
   }
 
-  // Recent date changes alert
+  // שינויי תאריך
   if (data.recent_changes && data.recent_changes.length > 0) {
-    const alert = document.getElementById('changesAlert');
-    const list  = document.getElementById('changesList');
-    alert.style.display = 'block';
-    list.innerHTML = data.recent_changes.slice(0,5).map(c =>
-      `<li>📅 <strong>${c.name || c.thread_id}</strong>: ${formatDate(c.old_date)} → <strong>${formatDate(c.new_date)}</strong></li>`
+    document.getElementById('changesAlert').style.display = 'block';
+    document.getElementById('changesList').innerHTML = data.recent_changes.slice(0,5).map(c =>
+      `<li>📅 <strong>${c.name||c.thread_id}</strong>: ${fmtDate(c.old_date)} → <strong>${fmtDate(c.new_date)}</strong></li>`
     ).join('');
   }
+
+  // בנה טאבים לפי חודש
+  buildMonthTabs(data.by_month || []);
 }
 
-// ─── MONTHS ──────────────────────────────────────────────────
-async function loadMonths() {
-  const months = await fetch('/api/months').then(r => r.json());
-  const sel = document.getElementById('filterMonth');
-  sel.innerHTML = '<option value="">כל החודשים</option>' +
-    months.map(m => {
-      const [y,mo] = m.split('-');
-      return `<option value="${m}">${monthNames[parseInt(mo)]} ${y}</option>`;
-    }).join('');
+function buildMonthTabs(byMonth) {
+  const tabs = document.getElementById('monthTabs');
+
+  // טאב "הכל"
+  let html = `<button class="month-tab ${activeMonth===''?'active':''}" onclick="setMonth('')">
+    כל החודשים <span class="cnt">${allStats.total||0}</span>
+  </button>`;
+
+  byMonth.forEach(item => {
+    const [y, m] = item.m.split('-');
+    const label = monthNames[parseInt(m)] + ' ' + y;
+    const active = activeMonth === item.m ? 'active' : '';
+    html += `<button class="month-tab ${active}" onclick="setMonth('${item.m}')">
+      ${label} <span class="cnt">${item.cnt}</span>
+    </button>`;
+  });
+
+  tabs.innerHTML = html;
+
+  // אם אין חודש נבחר – בחר את הנוכחי אוטומטית
+  if (activeMonth === '' && byMonth.length > 0) {
+    const thisMonth = new Date().toISOString().substring(0,7);
+    const found = byMonth.find(b => b.m === thisMonth);
+    if (found) {
+      setMonth(thisMonth);
+      return;
+    }
+  }
+  loadSales();
 }
 
-// ─── SALES ───────────────────────────────────────────────────
+function setMonth(m) {
+  activeMonth = m;
+  // עדכן טאבים
+  document.querySelectorAll('.month-tab').forEach(t => {
+    t.classList.remove('active');
+    if ((m === '' && t.textContent.includes('כל החודשים')) ||
+        t.getAttribute('onclick') === `setMonth('${m}')`) {
+      t.classList.add('active');
+    }
+  });
+  loadSales();
+}
+
 async function loadSales() {
   const q      = document.getElementById('searchInput').value;
-  const month  = document.getElementById('filterMonth').value;
   const status = document.getElementById('filterStatus').value;
   const conv   = document.getElementById('filterConverters').value;
 
   const params = new URLSearchParams();
-  if (q)      params.set('q', q);
-  if (month)  params.set('month', month);
+  if (q) params.set('q', q);
+  if (activeMonth) params.set('month', activeMonth);
   if (status) params.set('status', status);
 
   const data = await fetch('/api/sales?' + params).then(r => r.json());
-
-  // Client-side converters filter (not in API yet)
   let rows = data;
   if (conv) rows = rows.filter(r => String(r.converters) === conv);
 
-  // Sort
-  rows.sort((a, b) => {
-    let va = a[sortKey] || '', vb = b[sortKey] || '';
-    if (typeof va === 'number') return (va - vb) * sortDir;
-    return String(va).localeCompare(String(vb), 'he') * sortDir;
-  });
-
   document.getElementById('resultsCount').textContent = `${rows.length} תוצאות`;
-  renderRows(rows);
+  renderTable(rows);
 }
 
-function renderRows(rows) {
+function renderTable(rows) {
   const tbody = document.getElementById('tableBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="10">אין מכירות בסינון הנוכחי</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="11">אין מכירות בסינון הנוכחי</td></tr>';
     return;
   }
 
-  let html = '';
-  let lastMonth = null;
-  const today = new Date().toISOString().substring(0, 10);
-
-  rows.forEach(s => {
-    const mkey = s.install_date ? s.install_date.substring(0, 7) : '__none__';
-    if (mkey !== lastMonth) {
-      lastMonth = mkey;
-      const label = mkey === '__none__' ? 'ללא תאריך התקנה' : formatMonthLabel(mkey);
-      html += `<tr class="month-header"><td colspan="10">📅 ${label}</td></tr>`;
-    }
-    html += buildRow(s, today);
-  });
-
-  tbody.innerHTML = html;
-}
-
-function buildRow(s, today) {
+  const today = new Date().toISOString().substring(0,10);
   const statusMap = {
     waiting:  ['b-waiting',  'ממתין לחוזה'],
     approved: ['b-approved', 'אישר חוזה'],
@@ -667,82 +448,55 @@ function buildRow(s, today) {
     cancelled:['b-cancelled','בוטל'],
     sent:     ['b-sent',     'שיבוץ נשלח'],
   };
-  const [badgeCls, badgeLabel] = statusMap[s.status] || ['b-waiting', s.status || '–'];
-  const isToday    = s.install_date === today;
-  const dateCls    = isToday ? 'td-date highlight' : 'td-date';
-  const contractEl = s.contract_ok
-    ? '<span class="contract-ok">✓</span>'
-    : '<span class="contract-no">✗</span>';
 
-  return `<tr>
-    <td class="td-name">${esc(s.name || '')}</td>
-    <td class="td-num">${esc(s.customer_id || '–')}</td>
-    <td class="td-date">${formatDate(s.sale_date)}</td>
-    <td class="${dateCls}">${isToday ? '⭐ ' : ''}${formatDate(s.install_date)}</td>
-    <td class="td-date">${esc(s.install_hours || '–')}</td>
-    <td style="text-align:center;font-weight:600">${s.converters || '–'}</td>
-    <td style="font-size:12px">${esc(s.package || '–')}</td>
-    <td><span class="badge ${badgeCls}">${badgeLabel}</span></td>
-    <td style="text-align:center">${contractEl}</td>
-    <td class="notes-cell" title="${esc(s.notes || '')}">${esc(s.notes || '')}</td>
-  </tr>`;
+  tbody.innerHTML = rows.map((s, i) => {
+    const [bc, bl] = statusMap[s.status] || ['b-waiting', s.status||'–'];
+    const isToday  = s.install_date === today;
+    const isCancelled = s.status === 'cancelled';
+    const rowClass = isCancelled ? 'cancelled-row' : '';
+    const dateCls  = isToday ? 'td-date today' : 'td-date';
+
+    return `<tr class="${rowClass}">
+      <td style="color:var(--gray-400);font-size:11px">${i+1}</td>
+      <td class="td-name">${esc(s.name||'')}</td>
+      <td class="td-num">${esc(s.customer_id||'–')}</td>
+      <td class="td-date">${fmtDate(s.sale_date)}</td>
+      <td class="${dateCls}">${isToday?'⭐ ':''}${fmtDate(s.install_date)}</td>
+      <td class="td-date">${esc(s.install_hours||'–')}</td>
+      <td style="text-align:center;font-weight:600">${s.converters||'–'}</td>
+      <td style="font-size:12px">${esc(s.package||'–')}</td>
+      <td><span class="badge ${bc}">${bl}</span></td>
+      <td style="text-align:center">${s.contract_ok?'<span class="contract-ok">✓</span>':'<span class="contract-no">✗</span>'}</td>
+      <td class="notes-cell" title="${esc(s.notes||'')}">${esc(s.notes||'')}</td>
+    </tr>`;
+  }).join('');
 }
 
-// ─── FILTER HELPERS ──────────────────────────────────────────
-function filterByStatus(status) {
-  document.getElementById('filterStatus').value = status;
-  loadSales();
-}
-
-function filterByMonth(which) {
-  const m = which === 'this' ? allStats.current_month : allStats.last_month;
-  if (m) {
-    document.getElementById('filterMonth').value = m;
-    loadSales();
-  }
-}
-
-function setSort(key) {
-  if (sortKey === key) sortDir *= -1;
-  else { sortKey = key; sortDir = -1; }
-  // Update header classes
-  document.querySelectorAll('thead th').forEach(th => {
-    th.classList.remove('sorted-asc','sorted-desc');
-  });
+function filterStatus(s) {
+  document.getElementById('filterStatus').value = s;
   loadSales();
 }
 
 {% endif %}
 
-// ─── UTILS ───────────────────────────────────────────────────
-function formatDate(d) {
-  if (!d || d === 'null' || d === '') return '–';
+function fmtDate(d) {
+  if (!d || d==='null' || d==='') return '–';
   const p = d.split('-');
   if (p.length !== 3) return d;
   return `${p[2]}/${p[1]}/${p[0].slice(2)}`;
 }
 
-function formatMonthLabel(ym) {
-  if (!ym || ym === '__none__') return 'ללא תאריך';
-  const [y, m] = ym.split('-');
-  return `${monthNames[parseInt(m)]} ${y}`;
-}
-
 function esc(s) {
-  return String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function setProgress(pct) {
-  document.getElementById('progressFill').style.width = pct + '%';
-}
+function setProgress(p) { document.getElementById('progressFill').style.width = p+'%'; }
 
 function showToast(msg, type='') {
   const t = document.getElementById('toast');
   t.textContent = msg;
-  t.className = 'toast show' + (type ? ' '+type : '');
-  setTimeout(() => t.className = 'toast', 3500);
+  t.className = 'toast show' + (type?' '+type:'');
+  setTimeout(() => t.className='toast', 3500);
 }
 </script>
 </body>
