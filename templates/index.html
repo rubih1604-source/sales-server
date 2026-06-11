@@ -19,18 +19,12 @@ header {
   background:var(--gray-800); color:white; padding:12px 20px;
   display:flex; align-items:center; justify-content:space-between;
   position:sticky; top:0; z-index:200; box-shadow:0 2px 10px rgba(0,0,0,0.3);
+  height:52px;
 }
 .header-left { display:flex; align-items:center; gap:12px; }
 .header-left h1 { font-size:17px; font-weight:600; }
-.logo-dot {
-  width:9px; height:9px; border-radius:50%; background:var(--green);
-  box-shadow:0 0 0 3px rgba(13,158,92,0.3);
-  animation:pulse 2s infinite;
-}
-@keyframes pulse {
-  0%,100%{box-shadow:0 0 0 3px rgba(13,158,92,0.3);}
-  50%{box-shadow:0 0 0 6px rgba(13,158,92,0.1);}
-}
+.logo-dot { width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(13,158,92,0.3);animation:pulse 2s infinite; }
+@keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(13,158,92,0.3);}50%{box-shadow:0 0 0 6px rgba(13,158,92,0.1);}}
 .header-right { display:flex; align-items:center; gap:10px; }
 .scan-btn {
   background:var(--green); color:white; border:none;
@@ -42,143 +36,85 @@ header {
 .scan-btn:disabled { opacity:0.5; cursor:not-allowed; }
 .last-scan { font-size:11px; color:var(--gray-400); }
 
-#progressBar { height:3px; background:var(--gray-200); position:fixed; top:0; left:0; right:0; z-index:300; }
-#progressFill { height:100%; background:var(--green); width:0%; transition:width 0.4s; }
+#progressBar { height:3px;background:var(--gray-200);position:fixed;top:0;left:0;right:0;z-index:300; }
+#progressFill { height:100%;background:var(--green);width:0%;transition:width 0.4s; }
 
 .container { max-width:1440px; margin:0 auto; padding:16px; }
 
-/* LOGIN */
-.login-screen {
-  display:flex; flex-direction:column; align-items:center;
-  justify-content:center; min-height:80vh; text-align:center; gap:16px;
-}
-.login-screen h2 { font-size:24px; font-weight:700; }
-.login-screen p { color:var(--gray-400); }
-.big-login-btn {
-  background:white; border:2px solid var(--green); color:var(--green);
-  padding:14px 32px; border-radius:12px; font-family:inherit;
-  font-size:16px; font-weight:700; cursor:pointer; text-decoration:none;
-  transition:all 0.15s;
-}
-.big-login-btn:hover { background:var(--green); color:white; }
+.login-screen { display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;text-align:center;gap:16px; }
+.login-screen h2 { font-size:24px;font-weight:700; }
+.login-screen p  { color:var(--gray-400); }
+.big-login-btn { background:white;border:2px solid var(--green);color:var(--green);padding:14px 32px;border-radius:12px;font-family:inherit;font-size:16px;font-weight:700;cursor:pointer;text-decoration:none;transition:all 0.15s; }
+.big-login-btn:hover { background:var(--green);color:white; }
 
-/* STATS */
-.stats-row {
-  display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
-  gap:10px; margin-bottom:16px;
-}
-.stat-card {
-  background:white; border-radius:12px; padding:12px;
-  text-align:center; box-shadow:0 1px 4px rgba(0,0,0,0.06);
-  cursor:pointer; border:2px solid transparent; transition:all 0.15s;
-}
-.stat-card:hover { box-shadow:0 4px 12px rgba(0,0,0,0.1); transform:translateY(-1px); }
-.stat-num { font-size:24px; font-weight:700; color:var(--green); }
-.stat-label { font-size:11px; color:var(--gray-400); margin-top:3px; }
+.stats-row { display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px; }
+.stat-card { background:white;border-radius:12px;padding:12px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);cursor:pointer;border:2px solid transparent;transition:all 0.15s; }
+.stat-card:hover { box-shadow:0 4px 12px rgba(0,0,0,0.1);transform:translateY(-1px); }
+.stat-num   { font-size:24px;font-weight:700;color:var(--green); }
+.stat-label { font-size:11px;color:var(--gray-400);margin-top:3px; }
 
-/* MONTH TABS */
-.month-tabs {
-  display:flex; gap:6px; overflow-x:auto; padding-bottom:4px;
-  margin-bottom:14px; scrollbar-width:none;
-}
+.month-tabs { display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px;scrollbar-width:none; }
 .month-tabs::-webkit-scrollbar { display:none; }
-.month-tab {
-  background:white; border:2px solid var(--gray-200);
-  color:var(--gray-600); padding:8px 16px; border-radius:20px;
-  font-family:inherit; font-size:13px; font-weight:600;
-  cursor:pointer; white-space:nowrap; transition:all 0.15s;
-  display:flex; align-items:center; gap:6px;
-}
-.month-tab:hover { border-color:var(--green); color:var(--green); }
-.month-tab.active {
-  background:var(--green); border-color:var(--green);
-  color:white;
-}
-.month-tab .cnt {
-  background:rgba(255,255,255,0.25); border-radius:10px;
-  padding:1px 7px; font-size:11px;
-}
-.month-tab:not(.active) .cnt {
-  background:var(--gray-100); color:var(--gray-600);
-}
+.month-tab { background:white;border:2px solid var(--gray-200);color:var(--gray-600);padding:8px 16px;border-radius:20px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all 0.15s;display:flex;align-items:center;gap:6px; }
+.month-tab:hover { border-color:var(--green);color:var(--green); }
+.month-tab.active { background:var(--green);border-color:var(--green);color:white; }
+.month-tab .cnt { background:rgba(255,255,255,0.25);border-radius:10px;padding:1px 7px;font-size:11px; }
+.month-tab:not(.active) .cnt { background:var(--gray-100);color:var(--gray-600); }
 
-/* CHANGES ALERT */
-.changes-alert {
-  background:#fffbeb; border:1px solid #fcd34d;
-  border-radius:10px; padding:12px 16px; margin-bottom:14px; display:none;
-}
-.changes-alert h4 { font-size:13px; color:#92400e; margin-bottom:6px; }
-.changes-alert li { font-size:12px; color:#78350f; padding:2px 0; list-style:none; }
+.changes-alert { background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:none; }
+.changes-alert h4 { font-size:13px;color:#92400e;margin-bottom:6px; }
+.changes-alert li { font-size:12px;color:#78350f;padding:2px 0;list-style:none; }
 
-/* TOOLBAR */
-.toolbar {
-  background:white; border-radius:10px; padding:10px 14px;
-  margin-bottom:14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;
-  box-shadow:0 1px 4px rgba(0,0,0,0.06);
-}
-.toolbar input, .toolbar select {
-  font-family:inherit; font-size:13px; padding:6px 10px;
-  border:1px solid var(--gray-200); border-radius:7px;
-  background:var(--gray-50); color:var(--gray-800); direction:rtl;
-}
-.toolbar input:focus, .toolbar select:focus { border-color:var(--green); background:white; outline:none; }
+.toolbar { background:white;border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+.toolbar input, .toolbar select { font-family:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:7px;background:var(--gray-50);color:var(--gray-800);direction:rtl; }
+.toolbar input:focus, .toolbar select:focus { border-color:var(--green);background:white;outline:none; }
 .toolbar input { min-width:180px; }
-.results-count { font-size:12px; color:var(--gray-400); margin-right:auto; }
-.full-scan-btn {
-  font-family:inherit; font-size:11px; color:var(--gray-400);
-  background:none; border:none; cursor:pointer; text-decoration:underline;
-}
+.results-count { font-size:12px;color:var(--gray-400);margin-right:auto; }
+.full-scan-btn { font-family:inherit;font-size:11px;color:var(--gray-400);background:none;border:none;cursor:pointer;text-decoration:underline; }
 
-/* TABLE */
-.table-wrap { background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06); overflow:auto; }
-table { width:100%; border-collapse:collapse; font-size:13px; min-width:800px; }
-thead { background:var(--gray-800); color:white; position:sticky; top:52px; z-index:10; }
-thead th {
-  padding:10px; text-align:right; font-weight:500; font-size:12px;
-  white-space:nowrap; cursor:pointer; user-select:none;
-}
+.table-wrap { background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow:auto; }
+table { width:100%;border-collapse:collapse;font-size:13px;min-width:900px; }
+thead { background:var(--gray-800);color:white;position:sticky;top:52px;z-index:10; }
+thead th { padding:10px;text-align:right;font-weight:500;font-size:12px;white-space:nowrap;cursor:pointer;user-select:none; }
 thead th:hover { background:#374151; }
-tbody tr { border-bottom:1px solid var(--gray-100); transition:background 0.1s; }
+thead th.actions-col { cursor:default; }
+tbody tr { border-bottom:1px solid var(--gray-100);transition:background 0.1s; }
 tbody tr:hover { background:#f0f9f4; }
 tbody tr:last-child { border-bottom:none; }
 tbody tr.cancelled-row { background:#fff5f5; }
 tbody tr.cancelled-row:hover { background:#fee2e2; }
-td { padding:8px 10px; vertical-align:middle; white-space:nowrap; }
+tbody tr.editing-row { background:#f0f9ff; }
+td { padding:8px 10px;vertical-align:middle;white-space:nowrap; }
 .td-name { font-weight:600; }
-.td-num { font-family:monospace; font-size:12px; color:var(--gray-600); }
-.td-date { color:var(--gray-600); font-size:12px; }
-.td-date.today { color:var(--green); font-weight:700; }
+.td-num  { font-family:monospace;font-size:12px;color:var(--gray-600); }
+.td-date { color:var(--gray-600);font-size:12px; }
+.td-date.today { color:var(--green);font-weight:700; }
 
-.badge {
-  display:inline-flex; align-items:center; font-size:11px; font-weight:600;
-  padding:3px 8px; border-radius:20px; white-space:nowrap;
-}
-.b-waiting   { background:#fef3c7; color:#92400e; }
-.b-approved  { background:#d1fae5; color:#065f46; }
-.b-recorded  { background:#dbeafe; color:#1e40af; }
-.b-cancelled { background:#fee2e2; color:#991b1b; }
-.b-sent      { background:#ede9fe; color:#5b21b6; }
+.badge { display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;white-space:nowrap; }
+.b-waiting   { background:#fef3c7;color:#92400e; }
+.b-approved  { background:#d1fae5;color:#065f46; }
+.b-recorded  { background:#dbeafe;color:#1e40af; }
+.b-cancelled { background:#fee2e2;color:#991b1b; }
+.b-sent      { background:#ede9fe;color:#5b21b6; }
 
-.contract-ok { color:var(--green); font-size:16px; font-weight:700; }
-.contract-no { color:var(--gray-200); font-size:16px; }
-.notes-cell { max-width:160px; overflow:hidden; text-overflow:ellipsis; font-size:11px; color:var(--gray-400); cursor:help; }
+.contract-ok { color:var(--green);font-size:16px;font-weight:700; }
+.contract-no { color:var(--gray-200);font-size:16px; }
+.notes-cell  { max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:var(--gray-400);cursor:help; }
 
-.empty-row td, .loading-row td { text-align:center; padding:50px; color:var(--gray-400); }
-.spinner {
-  display:inline-block; width:18px; height:18px;
-  border:2px solid var(--gray-200); border-top-color:var(--green);
-  border-radius:50%; animation:spin 0.5s linear infinite; vertical-align:middle; margin-left:8px;
-}
+.edit-btn { background:none;border:1px solid var(--gray-200);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--gray-600);font-family:inherit;transition:all 0.1s; }
+.edit-btn:hover { border-color:var(--green);color:var(--green); }
+.save-btn { background:var(--green);color:white;border:none;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-family:inherit;margin-left:4px; }
+.cancel-btn { background:none;border:1px solid var(--gray-200);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--gray-600);font-family:inherit; }
+
+.inline-input { font-family:inherit;font-size:12px;padding:2px 6px;border:1px solid var(--green);border-radius:4px;background:white;width:100%; }
+.inline-select { font-family:inherit;font-size:12px;padding:2px 4px;border:1px solid var(--green);border-radius:4px;background:white; }
+
+.empty-row td, .loading-row td { text-align:center;padding:50px;color:var(--gray-400); }
+.spinner { display:inline-block;width:18px;height:18px;border:2px solid var(--gray-200);border-top-color:var(--green);border-radius:50%;animation:spin 0.5s linear infinite;vertical-align:middle;margin-left:8px; }
 @keyframes spin { to{transform:rotate(360deg);} }
 
-.toast {
-  position:fixed; bottom:24px; left:50%;
-  transform:translateX(-50%) translateY(20px);
-  background:var(--gray-800); color:white;
-  padding:10px 20px; border-radius:10px; font-size:13px;
-  z-index:999; opacity:0; transition:all 0.3s; pointer-events:none;
-}
-.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.toast { position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--gray-800);color:white;padding:10px 20px;border-radius:10px;font-size:13px;z-index:999;opacity:0;transition:all 0.3s;pointer-events:none; }
+.toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
 .toast.green { background:var(--green); }
 .toast.red   { background:var(--red); }
 </style>
@@ -196,7 +132,7 @@ td { padding:8px 10px; vertical-align:middle; white-space:nowrap; }
       <span class="last-scan" id="lastScanInfo"></span>
       <button class="scan-btn" id="scanBtn" onclick="startScan()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
-        סרוק מיילים
+        <span id="scanBtnLabel">סרוק מיילים</span>
       </button>
       <a href="/logout" style="color:var(--gray-400);font-size:12px;text-decoration:none;">יציאה</a>
     {% else %}
@@ -215,44 +151,34 @@ td { padding:8px 10px; vertical-align:middle; white-space:nowrap; }
   </div>
 {% else %}
 
-  <!-- STATS -->
-  <div class="stats-row" id="statsRow">
+  <div class="stats-row">
     <div class="stat-card" onclick="filterStatus('')">
-      <div class="stat-num" id="s-total">–</div>
-      <div class="stat-label">סה"כ מכירות</div>
+      <div class="stat-num" id="s-total">–</div><div class="stat-label">סה"כ מכירות</div>
     </div>
     <div class="stat-card" onclick="filterStatus('waiting')">
-      <div class="stat-num" id="s-waiting">–</div>
-      <div class="stat-label">ממתינים לחוזה</div>
+      <div class="stat-num" id="s-waiting">–</div><div class="stat-label">ממתינים לחוזה</div>
     </div>
     <div class="stat-card" onclick="filterStatus('approved')">
-      <div class="stat-num" id="s-approved">–</div>
-      <div class="stat-label">אישרו חוזה</div>
+      <div class="stat-num" id="s-approved">–</div><div class="stat-label">אישרו חוזה</div>
     </div>
     <div class="stat-card" onclick="filterStatus('recorded')">
-      <div class="stat-num" id="s-recorded">–</div>
-      <div class="stat-label">מוקלדים</div>
+      <div class="stat-num" id="s-recorded">–</div><div class="stat-label">מוקלדים</div>
     </div>
     <div class="stat-card" onclick="filterStatus('cancelled')">
-      <div class="stat-num" id="s-cancelled" style="color:var(--red)">–</div>
-      <div class="stat-label">בוטלו</div>
+      <div class="stat-num" id="s-cancelled" style="color:var(--red)">–</div><div class="stat-label">בוטלו</div>
     </div>
     <div class="stat-card">
-      <div class="stat-num" id="s-nocontract" style="color:var(--orange)">–</div>
-      <div class="stat-label">ללא חוזה</div>
+      <div class="stat-num" id="s-nocontract" style="color:var(--orange)">–</div><div class="stat-label">ללא חוזה</div>
     </div>
   </div>
 
-  <!-- DATE CHANGES ALERT -->
   <div class="changes-alert" id="changesAlert">
-    <h4>⚡ שינויי תאריך התקנה בסריקה האחרונה</h4>
+    <h4>⚡ שינויי תאריך התקנה</h4>
     <ul id="changesList"></ul>
   </div>
 
-  <!-- MONTH TABS -->
   <div class="month-tabs" id="monthTabs"></div>
 
-  <!-- TOOLBAR -->
   <div class="toolbar">
     <input type="text" id="searchInput" placeholder="🔍 שם לקוח / מס' לקוח..." oninput="loadSales()">
     <select id="filterStatus" onchange="loadSales()">
@@ -274,7 +200,6 @@ td { padding:8px 10px; vertical-align:middle; white-space:nowrap; }
     <button class="full-scan-btn" onclick="startScan(true)">סריקה מלאה (6 חודשים)</button>
   </div>
 
-  <!-- TABLE -->
   <div class="table-wrap">
     <table>
       <thead>
@@ -290,10 +215,11 @@ td { padding:8px 10px; vertical-align:middle; white-space:nowrap; }
           <th>סטטוס</th>
           <th style="text-align:center">חוזה</th>
           <th>הערות</th>
+          <th class="actions-col">עריכה</th>
         </tr>
       </thead>
       <tbody id="tableBody">
-        <tr class="loading-row"><td colspan="11">טוען... <span class="spinner"></span></td></tr>
+        <tr class="loading-row"><td colspan="12">טוען... <span class="spinner"></span></td></tr>
       </tbody>
     </table>
   </div>
@@ -306,15 +232,27 @@ td { padding:8px 10px; vertical-align:middle; white-space:nowrap; }
 <script>
 const monthNames = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 let activeMonth = '';
-let allStats = {};
-let scanning = false;
+let allStats    = {};
+let scanning    = false;
+let currentRows = [];
+let editingId   = null;
 
 {% if logged_in %}
-window.onload = () => {
-  loadStats();
-};
+window.onload = () => { loadStats(); };
 
-async function startScan(full = false) {
+// ── SCAN ─────────────────────────────────────────────────────
+function updateScanBtn() {
+  const lbl = document.getElementById('scanBtnLabel');
+  if (!lbl) return;
+  if (activeMonth) {
+    const [y,m] = activeMonth.split('-');
+    lbl.textContent = 'סרוק ' + monthNames[parseInt(m)] + ' ' + y;
+  } else {
+    lbl.textContent = 'סרוק מיילים';
+  }
+}
+
+async function startScan(full=false) {
   if (scanning) return;
   scanning = true;
   const btn = document.getElementById('scanBtn');
@@ -322,36 +260,34 @@ async function startScan(full = false) {
   btn.innerHTML = '<span class="spinner"></span> סורק...';
   setProgress(20);
   try {
-    setProgress(50);
     const resp = await fetch('/api/scan', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({full})
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({full, month: activeMonth})
     });
-    setProgress(85);
+    setProgress(80);
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || 'שגיאה');
+    if (!resp.ok) throw new Error(data.error||'שגיאה');
     setProgress(100);
     await loadStats();
-    showToast(`✅ ${data.scanned} מכירות • ${data.new} חדשות • ${data.updated} עודכנו`, 'green');
-  } catch(e) {
-    showToast('❌ ' + e.message, 'red');
-  }
+    showToast(`✅ ${data.scanned} מכירות • ${data.new} חדשות • ${data.updated} עודכנו`,'green');
+  } catch(e) { showToast('❌ '+e.message,'red'); }
   scanning = false;
   btn.disabled = false;
-  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>סרוק מיילים`;
-  setTimeout(() => setProgress(0), 600);
+  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg><span id="scanBtnLabel">סרוק מיילים</span>`;
+  updateScanBtn();
+  setTimeout(()=>setProgress(0),600);
 }
 
+// ── STATS ─────────────────────────────────────────────────────
 async function loadStats() {
-  const data = await fetch('/api/stats').then(r => r.json());
+  const data = await fetch('/api/stats').then(r=>r.json());
   allStats = data;
-  document.getElementById('s-total').textContent     = data.total || 0;
-  document.getElementById('s-waiting').textContent   = data.waiting || 0;
-  document.getElementById('s-approved').textContent  = data.approved || 0;
-  document.getElementById('s-recorded').textContent  = data.recorded || 0;
-  document.getElementById('s-cancelled').textContent = data.cancelled || 0;
-  document.getElementById('s-nocontract').textContent= data.no_contract || 0;
+  document.getElementById('s-total').textContent     = data.total||0;
+  document.getElementById('s-waiting').textContent   = data.waiting||0;
+  document.getElementById('s-approved').textContent  = data.approved||0;
+  document.getElementById('s-recorded').textContent  = data.recorded||0;
+  document.getElementById('s-cancelled').textContent = data.cancelled||0;
+  document.getElementById('s-nocontract').textContent= data.no_contract||0;
 
   if (data.last_scan) {
     const d = new Date(data.last_scan.scanned_at);
@@ -359,104 +295,82 @@ async function loadStats() {
       `סריקה: ${d.toLocaleDateString('he-IL')} ${d.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}`;
   }
 
-  // שינויי תאריך
   if (data.recent_changes && data.recent_changes.length > 0) {
     document.getElementById('changesAlert').style.display = 'block';
-    document.getElementById('changesList').innerHTML = data.recent_changes.slice(0,5).map(c =>
-      `<li>📅 <strong>${c.name||c.thread_id}</strong>: ${fmtDate(c.old_date)} → <strong>${fmtDate(c.new_date)}</strong></li>`
+    document.getElementById('changesList').innerHTML = data.recent_changes.slice(0,5).map(c=>
+      `<li>📅 <strong>${c.name||''}</strong>: ${fmtDate(c.old_date)} ${c.old_hours||''} → <strong>${fmtDate(c.new_date)} ${c.new_hours||''}</strong></li>`
     ).join('');
   }
 
-  // בנה טאבים לפי חודש
-  buildMonthTabs(data.by_month || []);
+  buildMonthTabs(data.by_month||[]);
 }
 
+// ── MONTH TABS ────────────────────────────────────────────────
 function buildMonthTabs(byMonth) {
   const tabs = document.getElementById('monthTabs');
-
-  // טאב "הכל"
   let html = `<button class="month-tab ${activeMonth===''?'active':''}" onclick="setMonth('')">
-    כל החודשים <span class="cnt">${allStats.total||0}</span>
-  </button>`;
-
+    כל החודשים <span class="cnt">${allStats.total||0}</span></button>`;
   byMonth.forEach(item => {
-    const [y, m] = item.m.split('-');
-    const label = monthNames[parseInt(m)] + ' ' + y;
-    const active = activeMonth === item.m ? 'active' : '';
+    const [y,m] = item.m.split('-');
+    const label = monthNames[parseInt(m)]+' '+y;
+    const active = activeMonth===item.m ? 'active' : '';
     html += `<button class="month-tab ${active}" onclick="setMonth('${item.m}')">
-      ${label} <span class="cnt">${item.cnt}</span>
-    </button>`;
+      ${label} <span class="cnt">${item.cnt}</span></button>`;
   });
-
   tabs.innerHTML = html;
 
-  // אם אין חודש נבחר – בחר את הנוכחי אוטומטית
-  if (activeMonth === '' && byMonth.length > 0) {
+  if (activeMonth==='' && byMonth.length>0) {
     const thisMonth = new Date().toISOString().substring(0,7);
-    const found = byMonth.find(b => b.m === thisMonth);
-    if (found) {
-      setMonth(thisMonth);
-      return;
-    }
+    if (byMonth.find(b=>b.m===thisMonth)) { setMonth(thisMonth); return; }
   }
   loadSales();
 }
 
 function setMonth(m) {
   activeMonth = m;
-  // עדכן טאבים
   document.querySelectorAll('.month-tab').forEach(t => {
-    t.classList.remove('active');
-    if ((m === '' && t.textContent.includes('כל החודשים')) ||
-        t.getAttribute('onclick') === `setMonth('${m}')`) {
-      t.classList.add('active');
-    }
+    t.classList.toggle('active', t.getAttribute('onclick')===`setMonth('${m}')` || (m==='' && t.textContent.includes('כל החודשים')));
   });
+  updateScanBtn();
   loadSales();
 }
 
+// ── SALES TABLE ───────────────────────────────────────────────
 async function loadSales() {
   const q      = document.getElementById('searchInput').value;
   const status = document.getElementById('filterStatus').value;
   const conv   = document.getElementById('filterConverters').value;
-
   const params = new URLSearchParams();
-  if (q) params.set('q', q);
+  if (q)           params.set('q',q);
   if (activeMonth) params.set('month', activeMonth);
-  if (status) params.set('status', status);
-
-  const data = await fetch('/api/sales?' + params).then(r => r.json());
-  let rows = data;
-  if (conv) rows = rows.filter(r => String(r.converters) === conv);
-
-  document.getElementById('resultsCount').textContent = `${rows.length} תוצאות`;
-  renderTable(rows);
+  if (status)      params.set('status', status);
+  const data = await fetch('/api/sales?'+params).then(r=>r.json());
+  currentRows = conv ? data.filter(r=>String(r.converters)===conv) : data;
+  document.getElementById('resultsCount').textContent = `${currentRows.length} תוצאות`;
+  renderTable();
 }
 
-function renderTable(rows) {
+function renderTable() {
   const tbody = document.getElementById('tableBody');
-  if (!rows.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="11">אין מכירות בסינון הנוכחי</td></tr>';
+  if (!currentRows.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="12">אין מכירות בסינון הנוכחי</td></tr>';
     return;
   }
-
   const today = new Date().toISOString().substring(0,10);
   const statusMap = {
-    waiting:  ['b-waiting',  'ממתין לחוזה'],
-    approved: ['b-approved', 'אישר חוזה'],
-    recorded: ['b-recorded', 'מוקלד'],
+    waiting:  ['b-waiting','ממתין לחוזה'],
+    approved: ['b-approved','אישר חוזה'],
+    recorded: ['b-recorded','מוקלד'],
     cancelled:['b-cancelled','בוטל'],
-    sent:     ['b-sent',     'שיבוץ נשלח'],
+    sent:     ['b-sent','שיבוץ נשלח'],
   };
-
-  tbody.innerHTML = rows.map((s, i) => {
-    const [bc, bl] = statusMap[s.status] || ['b-waiting', s.status||'–'];
-    const isToday  = s.install_date === today;
-    const isCancelled = s.status === 'cancelled';
-    const rowClass = isCancelled ? 'cancelled-row' : '';
+  tbody.innerHTML = currentRows.map((s,i) => {
+    if (s.id === editingId) return buildEditRow(s, i+1);
+    const [bc,bl] = statusMap[s.status]||['b-waiting',s.status||'–'];
+    const isToday  = s.install_date===today;
+    const rowClass = s.status==='cancelled' ? 'cancelled-row' : '';
     const dateCls  = isToday ? 'td-date today' : 'td-date';
-
-    return `<tr class="${rowClass}">
+    return `<tr class="${rowClass}" id="row-${s.id}">
       <td style="color:var(--gray-400);font-size:11px">${i+1}</td>
       <td class="td-name">${esc(s.name||'')}</td>
       <td class="td-num">${esc(s.customer_id||'–')}</td>
@@ -467,36 +381,100 @@ function renderTable(rows) {
       <td style="font-size:12px">${esc(s.package||'–')}</td>
       <td><span class="badge ${bc}">${bl}</span></td>
       <td style="text-align:center">${s.contract_ok?'<span class="contract-ok">✓</span>':'<span class="contract-no">✗</span>'}</td>
-      <td class="notes-cell" title="${esc(s.notes||'')}">${esc(s.notes||'')}</td>
+      <td class="notes-cell" title="${esc(s.notes||'')}${s.cancel_reason?'\n'+s.cancel_reason:''}">${esc(s.notes||'')}</td>
+      <td><button class="edit-btn" onclick="startEdit(${s.id})">✏️ ערוך</button></td>
     </tr>`;
   }).join('');
+}
+
+function buildEditRow(s, num) {
+  return `<tr class="editing-row" id="row-${s.id}">
+    <td style="color:var(--gray-400);font-size:11px">${num}</td>
+    <td><input class="inline-input" id="e-name" value="${esc(s.name||'')}" style="width:120px"></td>
+    <td><input class="inline-input" id="e-cid" value="${esc(s.customer_id||'')}" style="width:80px"></td>
+    <td class="td-date">${fmtDate(s.sale_date)}</td>
+    <td><input class="inline-input" id="e-idate" value="${s.install_date||''}" placeholder="YYYY-MM-DD" style="width:110px"></td>
+    <td><input class="inline-input" id="e-ihours" value="${esc(s.install_hours||'')}" placeholder="8-10" style="width:60px"></td>
+    <td><input class="inline-input" id="e-conv" value="${s.converters||''}" type="number" style="width:45px"></td>
+    <td>
+      <select class="inline-select" id="e-pkg">
+        ${['דאבל יס פלוס','דאבל יס','רק יס','דאבל סטינג','דאבל סיבים','מסך בלבד','other'].map(p=>
+          `<option ${s.package===p?'selected':''}>${p}</option>`).join('')}
+      </select>
+    </td>
+    <td>
+      <select class="inline-select" id="e-status">
+        ${[['waiting','ממתין לחוזה'],['approved','אישר חוזה'],['recorded','מוקלד'],['cancelled','בוטל'],['sent','שיבוץ נשלח']].map(([v,l])=>
+          `<option value="${v}" ${s.status===v?'selected':''}>${l}</option>`).join('')}
+      </select>
+    </td>
+    <td style="text-align:center">
+      <input type="checkbox" id="e-contract" ${s.contract_ok?'checked':''}>
+    </td>
+    <td><input class="inline-input" id="e-notes" value="${esc(s.notes||'')}" style="width:120px"></td>
+    <td>
+      <button class="save-btn" onclick="saveEdit(${s.id})">💾 שמור</button>
+      <button class="cancel-btn" onclick="cancelEdit()">ביטול</button>
+    </td>
+  </tr>`;
+}
+
+function startEdit(id) {
+  editingId = id;
+  renderTable();
+  document.getElementById(`row-${id}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function cancelEdit() {
+  editingId = null;
+  renderTable();
+}
+
+async function saveEdit(id) {
+  const payload = {
+    name:          document.getElementById('e-name').value,
+    customer_id:   document.getElementById('e-cid').value,
+    install_date:  document.getElementById('e-idate').value,
+    install_hours: document.getElementById('e-ihours').value,
+    converters:    parseInt(document.getElementById('e-conv').value)||0,
+    package:       document.getElementById('e-pkg').value,
+    status:        document.getElementById('e-status').value,
+    contract_ok:   document.getElementById('e-contract').checked ? 1 : 0,
+    notes:         document.getElementById('e-notes').value,
+  };
+  try {
+    const resp = await fetch(`/api/sale/${id}`, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) throw new Error('שגיאה בשמירה');
+    editingId = null;
+    await loadSales();
+    await loadStats();
+    showToast('✅ נשמר בהצלחה','green');
+  } catch(e) { showToast('❌ '+e.message,'red'); }
 }
 
 function filterStatus(s) {
   document.getElementById('filterStatus').value = s;
   loadSales();
 }
-
 {% endif %}
 
 function fmtDate(d) {
-  if (!d || d==='null' || d==='') return '–';
+  if (!d||d==='null'||d==='') return '–';
   const p = d.split('-');
-  if (p.length !== 3) return d;
+  if (p.length!==3) return d;
   return `${p[2]}/${p[1]}/${p[0].slice(2)}`;
 }
-
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-
-function setProgress(p) { document.getElementById('progressFill').style.width = p+'%'; }
-
-function showToast(msg, type='') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show' + (type?' '+type:'');
-  setTimeout(() => t.className='toast', 3500);
+function setProgress(p) { document.getElementById('progressFill').style.width=p+'%'; }
+function showToast(msg,type='') {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast show'+(type?' '+type:'');
+  setTimeout(()=>t.className='toast',3500);
 }
 </script>
 </body>
